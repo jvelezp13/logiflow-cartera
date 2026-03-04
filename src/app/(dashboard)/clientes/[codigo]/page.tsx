@@ -150,12 +150,12 @@ export default async function DetalleClientePage({
                   <p className="text-sm font-medium">{info.ciudad || "-"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Segmento</p>
-                  <p className="text-sm font-medium">{info.segmento || "-"}</p>
-                </div>
-                <div>
                   <p className="text-xs text-slate-400">Canal</p>
                   <p className="text-sm font-medium">{info.canal || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Tipologia</p>
+                  <p className="text-sm font-medium">{info.tipologia || "-"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Telefono</p>
@@ -164,6 +164,10 @@ export default async function DetalleClientePage({
                 <div>
                   <p className="text-xs text-slate-400">Correo</p>
                   <p className="text-sm font-medium">{info.correo || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Estado cliente</p>
+                  <p className="text-sm font-medium">{info.estado || "-"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Estado credito</p>

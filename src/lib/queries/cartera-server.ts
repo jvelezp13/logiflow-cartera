@@ -284,6 +284,7 @@ export async function getDetalleCliente(codigoCliente: string): Promise<{
       .select("*")
       .eq("tenant_id", tenantId)
       .eq("codigo_cliente", codigoCliente)
+      .eq("tipo", "PEDIDO")
       .order("fecha", { ascending: false })
       .limit(10),
   ]);
