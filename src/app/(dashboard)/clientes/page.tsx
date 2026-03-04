@@ -20,12 +20,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  getClientesConSaldo,
-  getCiudades,
-  getSegmentos,
-  ClienteEnriquecido,
-} from "@/lib/queries/cartera";
+import { formatCurrencyFull } from "@/lib/format";
+import { logError } from "@/lib/logger";
+import { searchClientes, loadFilterOptions } from "./actions";
+import type { ClienteEnriquecido } from "@/lib/queries/cartera-server";
 import { format } from "date-fns";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -44,33 +42,27 @@ export default function ClientesPage() {
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    async function loadFilters() {
-      const [ciudadesData, segmentosData] = await Promise.all([
-        getCiudades(),
-        getSegmentos(),
-      ]);
-      setCiudades(ciudadesData);
-      setSegmentos(segmentosData);
-    }
-    loadFilters();
+    loadFilterOptions().then(({ ciudades, segmentos }) => {
+      setCiudades(ciudades);
+      setSegmentos(segmentos);
+    });
   }, []);
 
   useEffect(() => {
     async function loadClientes() {
       setLoading(true);
       try {
-        const { clientes: data, total: totalClientes } =
-          await getClientesConSaldo(undefined, {
-            busqueda: busqueda || undefined,
-            ciudad: ciudad !== "all" ? ciudad : undefined,
-            segmento: segmento !== "all" ? segmento : undefined,
-            limit: ITEMS_PER_PAGE,
-            offset: page * ITEMS_PER_PAGE,
-          });
+        const { clientes: data, total: totalClientes } = await searchClientes({
+          busqueda: busqueda || undefined,
+          ciudad: ciudad !== "all" ? ciudad : undefined,
+          segmento: segmento !== "all" ? segmento : undefined,
+          limit: ITEMS_PER_PAGE,
+          offset: page * ITEMS_PER_PAGE,
+        });
         setClientes(data);
         setTotal(totalClientes);
       } catch (error) {
-        console.error("Error loading clientes:", error);
+        logError("Error loading clientes", error);
       } finally {
         setLoading(false);
       }
@@ -79,15 +71,6 @@ export default function ClientesPage() {
     const debounce = setTimeout(loadClientes, 300);
     return () => clearTimeout(debounce);
   }, [busqueda, ciudad, segmento, page]);
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
@@ -106,7 +89,7 @@ export default function ClientesPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  placeholder="Buscar por código..."
+                  placeholder="Buscar por codigo..."
                   value={busqueda}
                   onChange={(e) => {
                     setBusqueda(e.target.value);
@@ -169,28 +152,30 @@ export default function ClientesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Código</TableHead>
+                  <TableHead>Codigo</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Ciudad</TableHead>
                   <TableHead>Segmento</TableHead>
                   <TableHead className="text-right">Facturas</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
-                  <TableHead>Última Fecha</TableHead>
+                  <TableHead>Ultima Fecha</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                      <div
+                        className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"
+                        role="status"
+                      >
+                        <span className="sr-only">Cargando...</span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : clientes.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-center py-8 text-slate-500"
-                    >
+                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
                       No se encontraron clientes
                     </TableCell>
                   </TableRow>
@@ -211,18 +196,13 @@ export default function ClientesPage() {
                       <TableCell>{cliente.razon_social || "-"}</TableCell>
                       <TableCell>{cliente.ciudad || "-"}</TableCell>
                       <TableCell>{cliente.segmento || "-"}</TableCell>
-                      <TableCell className="text-right">
-                        {cliente.num_facturas}
-                      </TableCell>
+                      <TableCell className="text-right">{cliente.num_facturas}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(Number(cliente.total_deuda))}
+                        {formatCurrencyFull(Number(cliente.total_deuda))}
                       </TableCell>
                       <TableCell>
                         {cliente.ultimo_pedido_fecha
-                          ? format(
-                              new Date(cliente.ultimo_pedido_fecha),
-                              "dd MMM yyyy",
-                            )
+                          ? format(new Date(cliente.ultimo_pedido_fecha), "dd MMM yyyy")
                           : "-"}
                       </TableCell>
                     </TableRow>
@@ -233,7 +213,7 @@ export default function ClientesPage() {
           </CardContent>
         </Card>
 
-        {/* Paginación */}
+        {/* Paginacion */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
             <div className="text-sm text-slate-500">
@@ -246,17 +226,19 @@ export default function ClientesPage() {
                 size="sm"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
+                aria-label="Pagina anterior"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-sm">
-                Página {page + 1} de {totalPages}
+                Pagina {page + 1} de {totalPages}
               </span>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
+                aria-label="Pagina siguiente"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>

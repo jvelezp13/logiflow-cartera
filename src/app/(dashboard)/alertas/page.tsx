@@ -1,9 +1,5 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -12,99 +8,75 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getAlertasCompletas, AlertaCompleta } from "@/lib/queries/cartera";
+import { Badge } from "@/components/ui/badge";
+import { getAlertasCompletas } from "@/lib/queries/cartera-server";
+import { getUserProfile } from "@/lib/auth/get-tenant";
+import { formatCurrencyShort } from "@/lib/format";
 import Link from "next/link";
 import { AlertTriangle, AlertCircle, AlertOctagon, Info } from "lucide-react";
 
-export default function AlertasPage() {
-  const [alertas, setAlertas] = useState<AlertaCompleta[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadAlertas() {
-      try {
-        const data = await getAlertasCompletas();
-        setAlertas(data);
-      } catch (error) {
-        console.error("Error loading alertas:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadAlertas();
-  }, []);
-
-  const formatCurrency = (value: number) => {
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-      return `$${(value / 1000).toFixed(0)}K`;
-    }
-    return `$${value}`;
-  };
-
-  const getSeverityIcon = (severidad: string) => {
-    switch (severidad) {
-      case "critica":
-        return <AlertOctagon className="h-5 w-5 text-red-500" />;
-      case "alta":
-        return <AlertCircle className="h-5 w-5 text-orange-500" />;
-      case "media":
-        return <AlertTriangle className="h-5 w-5 text-amber-500" />;
-      default:
-        return <Info className="h-5 w-5 text-green-500" />;
-    }
-  };
-
-  const getSeverityBadge = (severidad: string) => {
-    switch (severidad) {
-      case "critica":
-        return "bg-red-500 text-white";
-      case "alta":
-        return "bg-orange-500 text-white";
-      case "media":
-        return "bg-amber-500 text-white";
-      default:
-        return "bg-green-500 text-white";
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col h-full">
-        <Header titulo="Alertas" />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    );
+function getSeverityIcon(severidad: string) {
+  switch (severidad) {
+    case "critica":
+      return <AlertOctagon className="h-5 w-5 text-red-500" />;
+    case "alta":
+      return <AlertCircle className="h-5 w-5 text-orange-500" />;
+    case "media":
+      return <AlertTriangle className="h-5 w-5 text-amber-500" />;
+    default:
+      return <Info className="h-5 w-5 text-green-500" />;
   }
+}
+
+function getSeverityBadgeClass(severidad: string) {
+  switch (severidad) {
+    case "critica":
+      return "bg-red-500 text-white";
+    case "alta":
+      return "bg-orange-500 text-white";
+    case "media":
+      return "bg-amber-500 text-white";
+    default:
+      return "bg-green-500 text-white";
+  }
+}
+
+export default async function AlertasPage() {
+  const profile = await getUserProfile();
+  const alertas = await getAlertasCompletas();
 
   // Agrupar alertas por tipo
-  const alertasPorTipo = alertas.reduce((acc, alerta) => {
-    if (!acc[alerta.tipo]) {
-      acc[alerta.tipo] = [];
-    }
-    acc[alerta.tipo].push(alerta);
-    return acc;
-  }, {} as Record<string, AlertaCompleta[]>);
+  const alertasPorTipo = alertas.reduce(
+    (acc, alerta) => {
+      if (!acc[alerta.tipo]) acc[alerta.tipo] = [];
+      acc[alerta.tipo].push(alerta);
+      return acc;
+    },
+    {} as Record<string, typeof alertas>
+  );
 
   return (
     <>
-      <Header titulo="Alertas" alertasCount={alertas.length} />
+      <Header
+        titulo="Alertas"
+        alertasCount={alertas.length}
+        userName={profile.full_name}
+        userRole={profile.role}
+      />
 
       <div className="p-6 space-y-6">
         {/* Resumen */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {Object.entries(alertasPorTipo).map(([tipo, lista]) => (
-            <Card key={tipo} className={`
-              ${tipo === "DEUDA_VENCIDA" ? "border-red-200 bg-red-50" : ""}
-              ${tipo === "PEDIDOS_PENDIENTES" ? "border-orange-200 bg-orange-50" : ""}
-              ${tipo === "CUPO_EXCEDIDO" ? "border-amber-200 bg-amber-50" : ""}
-              ${tipo === "CLIENTE_INACTIVO" ? "border-blue-200 bg-blue-50" : ""}
-            `}>
+            <Card
+              key={tipo}
+              className={`
+                ${tipo === "DEUDA_VENCIDA" ? "border-red-200 bg-red-50" : ""}
+                ${tipo === "PEDIDOS_PENDIENTES" ? "border-orange-200 bg-orange-50" : ""}
+                ${tipo === "CUPO_EXCEDIDO" ? "border-amber-200 bg-amber-50" : ""}
+                ${tipo === "CLIENTE_INACTIVO" ? "border-blue-200 bg-blue-50" : ""}
+              `}
+            >
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">
                   {tipo.replace(/_/g, " ")}
@@ -136,7 +108,7 @@ export default function AlertasPage() {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Ciudad</TableHead>
-                    <TableHead>Descripción</TableHead>
+                    <TableHead>Descripcion</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -146,7 +118,7 @@ export default function AlertasPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {getSeverityIcon(alerta.severidad)}
-                          <Badge className={getSeverityBadge(alerta.severidad)}>
+                          <Badge className={getSeverityBadgeClass(alerta.severidad)}>
                             {alerta.severidad.toUpperCase()}
                           </Badge>
                         </div>
@@ -169,7 +141,7 @@ export default function AlertasPage() {
                         {alerta.descripcion}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(alerta.valor)}
+                        {formatCurrencyShort(alerta.valor)}
                       </TableCell>
                     </TableRow>
                   ))}

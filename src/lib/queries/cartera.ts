@@ -2,7 +2,12 @@ import { createClient } from "@/lib/supabase/client";
 
 const client = createClient();
 
-const DEFAULT_TENANT_ID = "0bd44961-e36a-4fc1-8fbd-6577b09e6139";
+export const DEFAULT_TENANT_ID = "0bd44961-e36a-4fc1-8fbd-6577b09e6139";
+
+// Sanitizar input para evitar inyeccion en filtros PostgREST
+function sanitizeSearchInput(input: string): string {
+  return input.replace(/[%_.*,()\\\n\r]/g, "");
+}
 
 export interface DashboardKPIs {
   cartera_total: number;
@@ -40,9 +45,6 @@ export interface ClienteEnriquecido {
   cupo_asignado: number | null;
   ultimo_pedido_fecha: string | null;
 }
-
-// Alias para compatibilidad
-export const getAlertas = getAlertasCompletas;
 
 export interface FacturaEnriquecida {
   codigo_cliente: string;
@@ -201,7 +203,10 @@ export async function getClientesConSaldo(
     .eq("tenant_id", tenantId);
 
   if (options?.busqueda) {
-    query = query.or(`razon_social.ilike.%${options.busqueda}%,codigo_cliente.ilike.%${options.busqueda}%`);
+    const sanitized = sanitizeSearchInput(options.busqueda);
+    if (sanitized) {
+      query = query.or(`razon_social.ilike.%${sanitized}%,codigo_cliente.ilike.%${sanitized}%`);
+    }
   }
 
   if (options?.ciudad) {
@@ -420,62 +425,3 @@ export async function getAlertasCompletas(tenantId: string = DEFAULT_TENANT_ID):
   return alertas;
 }
 
-// Envejecimiento por vendedor
-export async function getEnvejecimientoPorVendedor(tenantId: string = DEFAULT_TENANT_ID) {
-  const { data, error } = await client
-    .from("vista_cartera_enriquecida")
-    .select("vendedor, rango_mora, total")
-    .eq("tenant_id", tenantId);
-
-  if (error) throw error;
-
-  // Agrupar por vendedor
-  const vendedorMap = new Map<string, { [key: string]: number }>();
-  
-  for (const item of data || []) {
-    if (!item.vendedor) continue;
-    if (!vendedorMap.has(item.vendedor)) {
-      vendedorMap.set(item.vendedor, {});
-    }
-    const vendedorData = vendedorMap.get(item.vendedor)!;
-    vendedorData[item.rango_mora] = (vendedorData[item.rango_mora] || 0) + Number(item.total);
-  }
-
-  return Array.from(vendedorMap.entries()).map(([vendedor, rangos]) => ({
-    vendedor,
-    ...rangos,
-  }));
-}
-
-// Envejecimiento por ciudad
-export async function getEnvejecimientoPorCiudad(tenantId: string = DEFAULT_TENANT_ID) {
-  const { data, error } = await client
-    .from("vista_cartera_enriquecida")
-    .select("ciudad, rango_mora, total")
-    .eq("tenant_id", tenantId)
-    .not("ciudad", "is", null);
-
-  if (error) throw error;
-
-  // Agrupar por ciudad
-  const result: { ciudad: string; "0": number; "1-30": number; "31-60": number; "61-90": number; "90+": number }[] = [];
-  const ciudadMap = new Map<string, { "0": number; "1-30": number; "31-60": number; "61-90": number; "90+": number }>();
-  
-  for (const item of data || []) {
-    if (!item.ciudad) continue;
-    if (!ciudadMap.has(item.ciudad)) {
-      ciudadMap.set(item.ciudad, { "0": 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
-    }
-    const ciudadData = ciudadMap.get(item.ciudad)!;
-    const rango = item.rango_mora as keyof typeof ciudadData;
-    if (rango in ciudadData) {
-      ciudadData[rango] = (ciudadData[rango] || 0) + Number(item.total);
-    }
-  }
-
-  ciudadMap.forEach((rangos, ciudad) => {
-    result.push({ ciudad, ...rangos });
-  });
-
-  return result.sort((a, b) => (b["1-30"] + b["31-60"]) - (a["1-30"] + a["31-60"]));
-}
