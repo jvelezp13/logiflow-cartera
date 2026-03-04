@@ -1,190 +1,258 @@
 import { createClient } from "@/lib/supabase/client";
-import type {
-  Cartera,
-  Pedido,
-  MaestraTotal,
-  ClienteConSaldo,
-  ResumenCartera,
-  AlertaCartera,
-} from "@/types/cartera";
 
 const client = createClient();
 
-// Tenant por defecto - Nexo Distribuciones
 const DEFAULT_TENANT_ID = "0bd44961-e36a-4fc1-8fbd-6577b09e6139";
 
-export async function getResumenCartera(
-  tenantId: string = DEFAULT_TENANT_ID,
-): Promise<ResumenCartera> {
+export interface DashboardKPIs {
+  cartera_total: number;
+  cartera_vencida: number;
+  cartera_por_vencer: number;
+  clientes_con_deuda: number;
+  facturas_vencidas: number;
+  facturas_por_vencer: number;
+}
+
+export interface ClienteEnriquecido {
+  codigo_cliente: string;
+  razon_social: string | null;
+  nombre_negocio: string | null;
+  nombre_completo: string | null;
+  documento: string | null;
+  ciudad: string | null;
+  departamento: string | null;
+  barrio: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  correo: string | null;
+  segmento: string | null;
+  tipologia: string | null;
+  canal: string | null;
+  subcanal: string | null;
+  estado: string | null;
+  total_deuda: number;
+  total_vencido: number;
+  total_por_vencer: number;
+  num_facturas: number;
+  maxima_mora: number;
+  pedidos_pendientes: number;
+  estado_credito: string | null;
+  cupo_asignado: number | null;
+  ultimo_pedido_fecha: string | null;
+}
+
+// Alias para compatibilidad
+export const getAlertas = getAlertasCompletas;
+
+export interface FacturaEnriquecida {
+  codigo_cliente: string;
+  razon_social: string | null;
+  nombre_negocio: string | null;
+  ciudad: string | null;
+  segmento: string | null;
+  no_factura: string;
+  fecha_factura: string | null;
+  fecha_vencimiento: string | null;
+  mora: number;
+  total: number;
+  vendedor: string | null;
+  estado_factura: string;
+  rango_mora: string;
+}
+
+export interface PedidoEnriquecido {
+  num_pedido: string;
+  estado: string;
+  fecha: string;
+  codigo_cliente: string;
+  razon_social: string | null;
+  ciudad: string | null;
+  total: number;
+  nombre_asesor: string | null;
+  deuda_total_cliente: number | null;
+  facturas_vencidas_cliente: number | null;
+}
+
+export interface EnvejecimientoRango {
+  label: string;
+  total: number;
+  cantidad_facturas: number;
+  porcentaje: number;
+}
+
+export interface AlertaCompleta {
+  tipo: "PEDIDOS_PENDIENTES" | "DEUDA_VENCIDA" | "CUPO_EXCEDIDO" | "CLIENTE_INACTIVO" | "SIN_CREDITO";
+  severidad: "critica" | "alta" | "media" | "baja";
+  titulo: string;
+  descripcion: string;
+  codigo_cliente: string;
+  razon_social: string | null;
+  ciudad: string | null;
+  valor: number;
+  factura?: string;
+  dias_mora?: number;
+  porcentaje_utilizado?: number;
+  dias_sin_pedido?: number;
+}
+
+// Dashboard KPIs usando vista enriquecida
+export async function getDashboardKPIs(tenantId: string = DEFAULT_TENANT_ID): Promise<DashboardKPIs> {
   const { data, error } = await client
-    .from("cartera")
-    .select("total, mora")
+    .from("vista_cliente_resumen")
+    .select("*")
     .eq("tenant_id", tenantId);
 
   if (error) throw error;
 
-  const totales = data.reduce(
-    (acc, item) => {
-      acc.total += item.total || 0;
-      if (item.mora && item.mora > 0) {
-        acc.vencido += item.total || 0;
-      } else {
-        acc.por_vencer += item.total || 0;
-      }
+  const kpis = data?.reduce(
+    (acc, cliente) => {
+      acc.cartera_total += Number(cliente.total_deuda) || 0;
+      acc.cartera_vencida += Number(cliente.total_vencido) || 0;
+      acc.cartera_por_vencer += Number(cliente.total_por_vencer) || 0;
+      acc.clientes_con_deuda += 1;
       return acc;
     },
-    { total: 0, por_vencer: 0, vencido: 0 },
-  );
+    {
+      cartera_total: 0,
+      cartera_vencida: 0,
+      cartera_por_vencer: 0,
+      clientes_con_deuda: 0,
+      facturas_vencidas: 0,
+      facturas_por_vencer: 0,
+    } as DashboardKPIs
+  ) || {
+    cartera_total: 0,
+    cartera_vencida: 0,
+    cartera_por_vencer: 0,
+    clientes_con_deuda: 0,
+    facturas_vencidas: 0,
+    facturas_por_vencer: 0,
+  };
 
-  // Contar clientes únicos
-  const { data: clientesData } = await client
-    .from("cartera")
-    .select("codigo_cliente")
+  // Obtener conteo de facturas
+  const { data: facturasData } = await client
+    .from("vista_cartera_enriquecida")
+    .select("mora")
     .eq("tenant_id", tenantId);
 
-  const clientesUnicos = new Set(clientesData?.map((c) => c.codigo_cliente));
+  if (facturasData) {
+    kpis.facturas_vencidas = facturasData.filter(f => (f.mora || 0) > 0).length;
+    kpis.facturas_por_vencer = facturasData.filter(f => (f.mora || 0) <= 0).length;
+  }
 
-  return {
-    ...totales,
-    clientes_activos: clientesUnicos.size,
-  };
+  return kpis;
 }
 
+// Envejecimiento por rangos
+export async function getEnvejecimiento(tenantId: string = DEFAULT_TENANT_ID): Promise<EnvejecimientoRango[]> {
+  const { data, error } = await client
+    .from("vista_cartera_enriquecida")
+    .select("rango_mora, total")
+    .eq("tenant_id", tenantId);
+
+  if (error) throw error;
+
+  const rangos = ["0", "1-30", "31-60", "61-90", "90+"];
+  const totalGeneral = data?.reduce((sum, f) => sum + Number(f.total), 0) || 0;
+
+  return rangos.map(rango => {
+    const filtered = data?.filter(f => f.rango_mora === rango) || [];
+    const total = filtered.reduce((sum, f) => sum + Number(f.total), 0);
+    return {
+      label: rango === "0" ? "Al día" : `${rango} días`,
+      total,
+      cantidad_facturas: filtered.length,
+      porcentaje: totalGeneral > 0 ? (total / totalGeneral) * 100 : 0,
+    };
+  });
+}
+
+// Top clientes con más deuda
+export async function getTopClientesDeuda(
+  tenantId: string = DEFAULT_TENANT_ID,
+  limit: number = 10
+): Promise<ClienteEnriquecido[]> {
+  const { data, error } = await client
+    .from("vista_cliente_resumen")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("total_deuda", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+}
+
+// Lista de clientes con saldo
 export async function getClientesConSaldo(
   tenantId: string = DEFAULT_TENANT_ID,
   options?: {
     busqueda?: string;
     ciudad?: string;
     segmento?: string;
+    solo_vencidos?: boolean;
     limit?: number;
     offset?: number;
-  },
-): Promise<{ clientes: ClienteConSaldo[]; total: number }> {
+  }
+): Promise<{ clientes: ClienteEnriquecido[]; total: number }> {
   let query = client
-    .from("cartera")
-    .select(
-      `
-      codigo_cliente,
-      no_factura,
-      total,
-      fecha_vencimiento,
-      mora
-    `,
-    )
+    .from("vista_cliente_resumen")
+    .select("*", { count: "exact" })
     .eq("tenant_id", tenantId);
 
   if (options?.busqueda) {
-    query = query.ilike("codigo_cliente", `%${options.busqueda}%`);
+    query = query.or(`razon_social.ilike.%${options.busqueda}%,codigo_cliente.ilike.%${options.busqueda}%`);
   }
-
-  const { data: carteraData, error: carteraError } = await query;
-
-  if (carteraError) throw carteraError;
-
-  // Agrupar por cliente
-  const clientesMap = new Map<string, ClienteConSaldo>();
-
-  for (const item of carteraData || []) {
-    const existing = clientesMap.get(item.codigo_cliente);
-    if (existing) {
-      existing.saldo += item.total || 0;
-      existing.num_facturas += 1;
-      if (
-        item.fecha_vencimiento &&
-        (!existing.ultima_fecha ||
-          item.fecha_vencimiento > existing.ultima_fecha)
-      ) {
-        existing.ultima_fecha = item.fecha_vencimiento;
-      }
-    } else {
-      clientesMap.set(item.codigo_cliente, {
-        codigo_cliente: item.codigo_cliente,
-        razon_social: null,
-        documento: null,
-        ciudad: null,
-        segmento: null,
-        estado: null,
-        saldo: item.total || 0,
-        num_facturas: 1,
-        ultima_fecha: item.fecha_vencimiento,
-      });
-    }
-  }
-
-  // Obtener datos de maestra_total
-  const codigos = Array.from(clientesMap.keys());
-  if (codigos.length > 0) {
-    const { data: maestraData } = await client
-      .from("maestra_total_v2")
-      .select("codigo_ecom, razon_social, documento, ciudad, segmento, estado")
-      .eq("tenant_id", tenantId)
-      .in("codigo_ecom", codigos);
-
-    for (const m of maestraData || []) {
-      const cliente = clientesMap.get(m.codigo_ecom);
-      if (cliente) {
-        cliente.razon_social = m.razon_social;
-        cliente.documento = m.documento;
-        cliente.ciudad = m.ciudad;
-        cliente.segmento = m.segmento;
-        cliente.estado = m.estado;
-      }
-    }
-  }
-
-  // Aplicar filtros adicionales
-  let clientes = Array.from(clientesMap.values());
 
   if (options?.ciudad) {
-    clientes = clientes.filter((c) => c.ciudad === options.ciudad);
+    query = query.eq("ciudad", options.ciudad);
   }
+
   if (options?.segmento) {
-    clientes = clientes.filter((c) => c.segmento === options.segmento);
+    query = query.eq("segmento", options.segmento);
   }
 
-  // Ordenar por saldo descendente
-  clientes.sort((a, b) => b.saldo - a.saldo);
-
-  const total = clientes.length;
-
-  // Aplicar paginación
-  if (options?.limit) {
-    clientes = clientes.slice(
-      options.offset || 0,
-      (options.offset || 0) + options.limit,
-    );
+  if (options?.solo_vencidos) {
+    query = query.gt("total_vencido", 0);
   }
 
-  return { clientes, total };
+  const { data, error, count } = await query
+    .order("total_deuda", { ascending: false })
+    .range(options?.offset || 0, (options?.offset || 0) + (options?.limit || 20) - 1);
+
+  if (error) throw error;
+
+  return { clientes: data || [], total: count || 0 };
 }
 
+// Detalle de un cliente específico
 export async function getDetalleCliente(
   codigoCliente: string,
-  tenantId: string = DEFAULT_TENANT_ID,
+  tenantId: string = DEFAULT_TENANT_ID
 ): Promise<{
-  info: MaestraTotal | null;
-  facturas: Cartera[];
-  pedidos: Pedido[];
+  info: ClienteEnriquecido | null;
+  facturas: FacturaEnriquecida[];
+  pedidos: PedidoEnriquecido[];
 }> {
   // Info del cliente
-  const { data: info } = await client
-    .from("maestra_total_v2")
+  const { data: clienteData } = await client
+    .from("vista_cliente_resumen")
     .select("*")
     .eq("tenant_id", tenantId)
-    .eq("codigo_ecom", codigoCliente)
+    .eq("codigo_cliente", codigoCliente)
     .single();
 
   // Facturas
-  const { data: facturas } = await client
-    .from("cartera")
+  const { data: facturasData } = await client
+    .from("vista_cartera_enriquecida")
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("codigo_cliente", codigoCliente)
     .order("fecha_vencimiento", { ascending: false });
 
   // Pedidos
-  const { data: pedidos } = await client
-    .from("pedidos")
+  const { data: pedidosData } = await client
+    .from("vista_pedidos_enriquecida")
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("codigo_cliente", codigoCliente)
@@ -192,155 +260,222 @@ export async function getDetalleCliente(
     .limit(10);
 
   return {
-    info: info || null,
-    facturas: facturas || [],
-    pedidos: pedidos || [],
+    info: clienteData || null,
+    facturas: facturasData || [],
+    pedidos: pedidosData || [],
   };
 }
 
-export async function getEnvejecimiento(
+// Pedidos pendientes (Sin Descargar) recientes
+export async function getPedidosPendientes(
   tenantId: string = DEFAULT_TENANT_ID,
-  rangos: { label: string; min: number; max: number | null }[] = [
-    { label: "0-30 días", min: 0, max: 30 },
-    { label: "31-60 días", min: 31, max: 60 },
-    { label: "61-90 días", min: 61, max: 90 },
-    { label: "90+ días", min: 91, max: null },
-  ],
-): Promise<{ label: string; total: number; porcentaje: number }[]> {
+  dias: number = 7,
+  limit: number = 50
+): Promise<PedidoEnriquecido[]> {
+  const fechaLimite = new Date();
+  fechaLimite.setDate(fechaLimite.getDate() - dias);
+
   const { data, error } = await client
-    .from("cartera")
-    .select("mora, total")
-    .eq("tenant_id", tenantId);
+    .from("vista_pedidos_enriquecida")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("estado", "Sin Descargar")
+    .gte("fecha", fechaLimite.toISOString().split("T")[0])
+    .order("fecha", { ascending: false })
+    .limit(limit);
 
   if (error) throw error;
-
-  const totalGeneral = data.reduce((sum, item) => sum + (item.total || 0), 0);
-
-  return rangos.map((rango) => {
-    const filtered = data.filter((item) => {
-      const mora = item.mora || 0;
-      if (rango.max === null) {
-        return mora >= rango.min;
-      }
-      return mora >= rango.min && mora <= rango.max;
-    });
-
-    const total = filtered.reduce((sum, item) => sum + (item.total || 0), 0);
-
-    return {
-      label: rango.label,
-      total,
-      porcentaje: totalGeneral > 0 ? (total / totalGeneral) * 100 : 0,
-    };
-  });
+  return data || [];
 }
 
-export async function getAlertas(
-  tenantId: string = DEFAULT_TENANT_ID,
-  diasPedidos: number = 3,
-  rangoMoraMin: number = 1,
-  rangoMoraMax: number = 30,
-): Promise<AlertaCartera[]> {
-  // Clientes con pedidos recientes
-  const { data: pedidosData } = await client
-    .from("pedidos")
-    .select("codigo_cliente, num_pedido, fecha, total")
-    .eq("tenant_id", tenantId)
-    .gte(
-      "fecha",
-      new Date(Date.now() - diasPedidos * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0],
-    )
-    .order("fecha", { ascending: false });
-
-  if (!pedidosData || pedidosData.length === 0) {
-    return [];
-  }
-
-  const codigosClientes = [
-    ...new Set(pedidosData.map((p) => p.codigo_cliente).filter(Boolean)),
-  ];
-
-  if (codigosClientes.length === 0) {
-    return [];
-  }
-
-  // Facturas vencidas de esos clientes
-  const { data: carteraData } = await client
-    .from("cartera")
-    .select("codigo_cliente, no_factura, fecha_vencimiento, total, mora")
-    .eq("tenant_id", tenantId)
-    .in("codigo_cliente", codigosClientes)
-    .gt("mora", rangoMoraMin - 1)
-    .lte("mora", rangoMoraMax);
-
-  // Obtener datos de maestra para razón social
-  const { data: maestraData } = await client
-    .from("maestra_total_v2")
-    .select("codigo_ecom, razon_social")
-    .eq("tenant_id", tenantId)
-    .in("codigo_ecom", codigosClientes);
-
-  const maestraMap = new Map(
-    maestraData?.map((m) => [m.codigo_ecom, m.razon_social]) || [],
-  );
-
-  // Mapear pedidos a alertas
-  const alertas: AlertaCartera[] = [];
-
-  for (const pedido of pedidosData) {
-    if (!pedido.codigo_cliente) continue;
-
-    const facturasVencidas =
-      carteraData?.filter(
-        (c) => c.codigo_cliente === pedido.codigo_cliente && c.mora > 0,
-      ) || [];
-
-    for (const factura of facturasVencidas) {
-      alertas.push({
-        codigo_cliente: pedido.codigo_cliente,
-        razon_social: maestraMap.get(pedido.codigo_cliente) || null,
-        num_pedido: pedido.num_pedido,
-        fecha_pedido: pedido.fecha,
-        valor_pedido: pedido.total,
-        no_factura: factura.no_factura,
-        fecha_vencimiento: factura.fecha_vencimiento,
-        valor_factura: factura.total,
-        mora: factura.mora,
-      });
-    }
-  }
-
-  return alertas;
-}
-
-export async function getCiudades(
-  tenantId: string = DEFAULT_TENANT_ID,
-): Promise<string[]> {
+// Lista de ciudades disponibles
+export async function getCiudades(tenantId: string = DEFAULT_TENANT_ID): Promise<string[]> {
   const { data, error } = await client
-    .from("maestra_total_v2")
+    .from("vista_cliente_resumen")
     .select("ciudad")
     .eq("tenant_id", tenantId)
     .not("ciudad", "is", null);
 
   if (error) throw error;
-
-  return [...new Set(data?.map((d) => d.ciudad).filter(Boolean) || [])].sort();
+  return [...new Set(data?.map(d => d.ciudad).filter(Boolean) || [])].sort();
 }
 
-export async function getSegmentos(
-  tenantId: string = DEFAULT_TENANT_ID,
-): Promise<string[]> {
+// Lista de segmentos disponibles
+export async function getSegmentos(tenantId: string = DEFAULT_TENANT_ID): Promise<string[]> {
   const { data, error } = await client
-    .from("maestra_total_v2")
+    .from("vista_cliente_resumen")
     .select("segmento")
     .eq("tenant_id", tenantId)
     .not("segmento", "is", null);
 
   if (error) throw error;
+  return [...new Set(data?.map(d => d.segmento).filter(Boolean) || [])].sort();
+}
 
-  return [
-    ...new Set(data?.map((d) => d.segmento).filter(Boolean) || []),
-  ].sort();
+// Sistema completo de alertas
+export async function getAlertasCompletas(tenantId: string = DEFAULT_TENANT_ID): Promise<AlertaCompleta[]> {
+  const alertas: AlertaCompleta[] = [];
+
+  // 1. Clientes con pedidos pendientes (Sin Descargar)
+  const pedidosPendientes = await getPedidosPendientes(tenantId, 3, 100);
+  
+  for (const pedido of pedidosPendientes) {
+    if ((pedido.facturas_vencidas_cliente || 0) > 0) {
+      alertas.push({
+        tipo: "PEDIDOS_PENDIENTES",
+        severidad: "alta",
+        titulo: "Pedido pendiente con deuda vencida",
+        descripcion: `Cliente con pedido #${pedido.num_pedido} sin descargar y con facturas vencidas`,
+        codigo_cliente: pedido.codigo_cliente,
+        razon_social: pedido.razon_social,
+        ciudad: pedido.ciudad,
+        valor: Number(pedido.total),
+        dias_mora: undefined,
+      });
+    }
+  }
+
+  // 2. Clientes con deuda vencida significativa
+  const { data: clientesConDeuda } = await client
+    .from("vista_cliente_resumen")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .gt("total_vencido", 0)
+    .order("total_vencido", { ascending: false })
+    .limit(20);
+
+  for (const cliente of clientesConDeuda || []) {
+    if (Number(cliente.total_vencido) > 1000000) {
+      alertas.push({
+        tipo: "DEUDA_VENCIDA",
+        severidad: Number(cliente.total_vencido) > 3000000 ? "critica" : "alta",
+        titulo: "Deuda vencida significativa",
+        descripcion: `Cliente con $${Number(cliente.total_vencido).toLocaleString()} en deuda vencida`,
+        codigo_cliente: cliente.codigo_cliente,
+        razon_social: cliente.razon_social,
+        ciudad: cliente.ciudad,
+        valor: Number(cliente.total_vencido),
+        dias_mora: Number(cliente.maxima_mora),
+      });
+    }
+  }
+
+  // 3. Clientes cerca del cupo (más de 80%)
+  const { data: clientesCredito } = await client
+    .from("vista_cliente_resumen")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("estado_credito", "Activo")
+    .not("cupo_asignado", "is", null)
+    .gt("cupo_asignado", 0);
+
+  for (const cliente of clientesCredito || []) {
+    const utilizado = Number(cliente.total_deuda);
+    const cupo = Number(cliente.cupo_asignado);
+    const porcentaje = (utilizado /cupo) * 100;
+
+    if (porcentaje > 80) {
+      alertas.push({
+        tipo: "CUPO_EXCEDIDO",
+        severidad: porcentaje > 95 ? "critica" : porcentaje > 90 ? "alta" : "media",
+        titulo: porcentaje > 100 ? "Cupo excedido" : "Cerca del cupo de crédito",
+        descripcion: `Cliente usando ${porcentaje.toFixed(1)}% del cupo ($${utilizado.toLocaleString()} de $${cupo.toLocaleString()})`,
+        codigo_cliente: cliente.codigo_cliente,
+        razon_social: cliente.razon_social,
+        ciudad: cliente.ciudad,
+        valor: utilizado,
+        porcentaje_utilizado: porcentaje,
+      });
+    }
+  }
+
+  // 4. Clientes con deuda pero sin pedidos recientes (30+ días)
+  const fechaLimite = new Date();
+  fechaLimite.setDate(fechaLimite.getDate() - 30);
+
+  for (const cliente of clientesConDeuda || []) {
+    if (cliente.ultimo_pedido_fecha) {
+      const fechaUltimo = new Date(cliente.ultimo_pedido_fecha);
+      if (fechaUltimo < fechaLimite) {
+        const diasSinPedido = Math.floor((Date.now() - fechaUltimo.getTime()) / (1000 * 60 * 60 * 24));
+        alertas.push({
+          tipo: "CLIENTE_INACTIVO",
+          severidad: "media",
+          titulo: "Cliente inactivo con deuda",
+          descripcion: `${diasSinPedido} días sin pedidos pero con deuda activa`,
+          codigo_cliente: cliente.codigo_cliente,
+          razon_social: cliente.razon_social,
+          ciudad: cliente.ciudad,
+          valor: Number(cliente.total_deuda),
+          dias_sin_pedido: diasSinPedido,
+        });
+      }
+    }
+  }
+
+  // Ordenar por severidad
+  const severidadOrden = { critica: 0, alta: 1, media: 2, baja: 3 };
+  alertas.sort((a, b) => severidadOrden[a.severidad] - severidadOrden[b.severidad]);
+
+  return alertas;
+}
+
+// Envejecimiento por vendedor
+export async function getEnvejecimientoPorVendedor(tenantId: string = DEFAULT_TENANT_ID) {
+  const { data, error } = await client
+    .from("vista_cartera_enriquecida")
+    .select("vendedor, rango_mora, total")
+    .eq("tenant_id", tenantId);
+
+  if (error) throw error;
+
+  // Agrupar por vendedor
+  const vendedorMap = new Map<string, { [key: string]: number }>();
+  
+  for (const item of data || []) {
+    if (!item.vendedor) continue;
+    if (!vendedorMap.has(item.vendedor)) {
+      vendedorMap.set(item.vendedor, {});
+    }
+    const vendedorData = vendedorMap.get(item.vendedor)!;
+    vendedorData[item.rango_mora] = (vendedorData[item.rango_mora] || 0) + Number(item.total);
+  }
+
+  return Array.from(vendedorMap.entries()).map(([vendedor, rangos]) => ({
+    vendedor,
+    ...rangos,
+  }));
+}
+
+// Envejecimiento por ciudad
+export async function getEnvejecimientoPorCiudad(tenantId: string = DEFAULT_TENANT_ID) {
+  const { data, error } = await client
+    .from("vista_cartera_enriquecida")
+    .select("ciudad, rango_mora, total")
+    .eq("tenant_id", tenantId)
+    .not("ciudad", "is", null);
+
+  if (error) throw error;
+
+  // Agrupar por ciudad
+  const result: { ciudad: string; "0": number; "1-30": number; "31-60": number; "61-90": number; "90+": number }[] = [];
+  const ciudadMap = new Map<string, { "0": number; "1-30": number; "31-60": number; "61-90": number; "90+": number }>();
+  
+  for (const item of data || []) {
+    if (!item.ciudad) continue;
+    if (!ciudadMap.has(item.ciudad)) {
+      ciudadMap.set(item.ciudad, { "0": 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
+    }
+    const ciudadData = ciudadMap.get(item.ciudad)!;
+    const rango = item.rango_mora as keyof typeof ciudadData;
+    if (rango in ciudadData) {
+      ciudadData[rango] = (ciudadData[rango] || 0) + Number(item.total);
+    }
+  }
+
+  ciudadMap.forEach((rangos, ciudad) => {
+    result.push({ ciudad, ...rangos });
+  });
+
+  return result.sort((a, b) => (b["1-30"] + b["31-60"]) - (a["1-30"] + a["31-60"]));
 }

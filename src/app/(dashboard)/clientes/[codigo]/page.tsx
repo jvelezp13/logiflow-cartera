@@ -14,8 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { getDetalleCliente } from "@/lib/queries/cartera";
-import type { Cartera, Pedido, MaestraTotal } from "@/types/cartera";
+import { getDetalleCliente, ClienteEnriquecido, FacturaEnriquecida, PedidoEnriquecido } from "@/lib/queries/cartera";
 import { format } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -24,9 +23,9 @@ export default function DetalleClientePage() {
   const params = useParams();
   const codigo = params.codigo as string;
 
-  const [info, setInfo] = useState<MaestraTotal | null>(null);
-  const [facturas, setFacturas] = useState<Cartera[]>([]);
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [info, setInfo] = useState<ClienteEnriquecido | null>(null);
+  const [facturas, setFacturas] = useState<FacturaEnriquecida[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoEnriquecido[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

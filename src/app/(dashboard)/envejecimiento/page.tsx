@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getEnvejecimiento } from "@/lib/queries/cartera";
+import { getEnvejecimiento, EnvejecimientoRango } from "@/lib/queries/cartera";
 import {
   BarChart,
   Bar,
@@ -15,29 +15,18 @@ import {
   Cell,
   PieChart,
   Pie,
-  Legend,
 } from "recharts";
 
 const COLORS = ["#22c55e", "#eab308", "#f97316", "#ef4444", "#991b1b"];
 
 export default function EnvejecimientoPage() {
-  const [data, setData] = useState<
-    { label: string; total: number; porcentaje: number }[]
-  >([]);
+  const [data, setData] = useState<EnvejecimientoRango[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Rangos configurables - en el futuro vendrán de la DB
-  const [rangos, setRangos] = useState([
-    { label: "0-30 días", min: 0, max: 30 },
-    { label: "31-60 días", min: 31, max: 60 },
-    { label: "61-90 días", min: 61, max: 90 },
-    { label: "90+ días", min: 91, max: null },
-  ]);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const result = await getEnvejecimiento(undefined, rangos);
+        const result = await getEnvejecimiento();
         setData(result);
       } catch (error) {
         console.error("Error loading envejecimiento:", error);
@@ -47,7 +36,7 @@ export default function EnvejecimientoPage() {
     }
 
     loadData();
-  }, [rangos]);
+  }, []);
 
   const formatCurrency = (value: number) => {
     if (value >= 1000000) {

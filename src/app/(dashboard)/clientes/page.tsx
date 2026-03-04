@@ -24,8 +24,8 @@ import {
   getClientesConSaldo,
   getCiudades,
   getSegmentos,
+  ClienteEnriquecido,
 } from "@/lib/queries/cartera";
-import type { ClienteConSaldo } from "@/types/cartera";
 import { format } from "date-fns";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -33,7 +33,7 @@ import Link from "next/link";
 const ITEMS_PER_PAGE = 50;
 
 export default function ClientesPage() {
-  const [clientes, setClientes] = useState<ClienteConSaldo[]>([]);
+  const [clientes, setClientes] = useState<ClienteEnriquecido[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -215,12 +215,12 @@ export default function ClientesPage() {
                         {cliente.num_facturas}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(cliente.saldo)}
+                        {formatCurrency(Number(cliente.total_deuda))}
                       </TableCell>
                       <TableCell>
-                        {cliente.ultima_fecha
+                        {cliente.ultimo_pedido_fecha
                           ? format(
-                              new Date(cliente.ultima_fecha),
+                              new Date(cliente.ultimo_pedido_fecha),
                               "dd MMM yyyy",
                             )
                           : "-"}

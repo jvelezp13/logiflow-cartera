@@ -12,21 +12,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getAlertas } from "@/lib/queries/cartera";
-import type { AlertaCartera } from "@/types/cartera";
-import { format } from "date-fns";
+import { getAlertasCompletas, AlertaCompleta } from "@/lib/queries/cartera";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, AlertCircle, AlertOctagon, Info } from "lucide-react";
 
 export default function AlertasPage() {
-  const [alertas, setAlertas] = useState<AlertaCartera[]>([]);
+  const [alertas, setAlertas] = useState<AlertaCompleta[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadAlertas() {
       try {
-        // Configurable: últimos 3 días, mora entre 1-30 días
-        const data = await getAlertas(undefined, 3, 1, 30);
+        const data = await getAlertasCompletas();
         setAlertas(data);
       } catch (error) {
         console.error("Error loading alertas:", error);
@@ -39,19 +36,39 @@ export default function AlertasPage() {
   }, []);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(1)}M`;
+    }
+    if (value >= 1000) {
+      return `$${(value / 1000).toFixed(0)}K`;
+    }
+    return `$${value}`;
   };
 
-  const getMoraColor = (mora: number) => {
-    if (mora <= 7) return "bg-green-100 text-green-800";
-    if (mora <= 15) return "bg-yellow-100 text-yellow-800";
-    if (mora <= 30) return "bg-orange-100 text-orange-800";
-    return "bg-red-100 text-red-800";
+  const getSeverityIcon = (severidad: string) => {
+    switch (severidad) {
+      case "critica":
+        return <AlertOctagon className="h-5 w-5 text-red-500" />;
+      case "alta":
+        return <AlertCircle className="h-5 w-5 text-orange-500" />;
+      case "media":
+        return <AlertTriangle className="h-5 w-5 text-amber-500" />;
+      default:
+        return <Info className="h-5 w-5 text-green-500" />;
+    }
+  };
+
+  const getSeverityBadge = (severidad: string) => {
+    switch (severidad) {
+      case "critica":
+        return "bg-red-500 text-white";
+      case "alta":
+        return "bg-orange-500 text-white";
+      case "media":
+        return "bg-amber-500 text-white";
+      default:
+        return "bg-green-500 text-white";
+    }
   };
 
   if (loading) {
@@ -65,94 +82,100 @@ export default function AlertasPage() {
     );
   }
 
+  // Agrupar alertas por tipo
+  const alertasPorTipo = alertas.reduce((acc, alerta) => {
+    if (!acc[alerta.tipo]) {
+      acc[alerta.tipo] = [];
+    }
+    acc[alerta.tipo].push(alerta);
+    return acc;
+  }, {} as Record<string, AlertaCompleta[]>);
+
   return (
     <>
       <Header titulo="Alertas" alertasCount={alertas.length} />
 
       <div className="p-6 space-y-6">
-        {/* Info */}
-        <Card className="bg-amber-50 border-amber-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-amber-800 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Clientes con pedidos recientes y facturas vencidas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-amber-700">
-              Mostrando clientes que hicieron pedidos en los últimos 3 días y
-              tienen facturas con 1-30 días de mora.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Resumen */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Object.entries(alertasPorTipo).map(([tipo, lista]) => (
+            <Card key={tipo} className={`
+              ${tipo === "DEUDA_VENCIDA" ? "border-red-200 bg-red-50" : ""}
+              ${tipo === "PEDIDOS_PENDIENTES" ? "border-orange-200 bg-orange-50" : ""}
+              ${tipo === "CUPO_EXCEDIDO" ? "border-amber-200 bg-amber-50" : ""}
+              ${tipo === "CLIENTE_INACTIVO" ? "border-blue-200 bg-blue-50" : ""}
+            `}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {tipo.replace(/_/g, " ")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{lista.length}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-        {/* Tabla */}
+        {/* Lista de alertas */}
         <Card>
           <CardHeader>
-            <CardTitle>{alertas.length} alertas encontradas</CardTitle>
+            <CardTitle>Todas las Alertas ({alertas.length})</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Pedido</TableHead>
-                  <TableHead>Fecha Pedido</TableHead>
-                  <TableHead>Valor Pedido</TableHead>
-                  <TableHead>Factura</TableHead>
-                  <TableHead>Mora</TableHead>
-                  <TableHead className="text-right">Valor Factura</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {alertas.length === 0 ? (
+            {alertas.length === 0 ? (
+              <div className="text-center py-12 text-slate-500">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                <p>No hay alertas en este momento</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-center py-8 text-slate-500"
-                    >
-                      No hay alertas
-                    </TableCell>
+                    <TableHead>Severidad</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Ciudad</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
                   </TableRow>
-                ) : (
-                  alertas.map((alerta, index) => (
-                    <TableRow
-                      key={`${alerta.codigo_cliente}-${alerta.no_factura}-${index}`}
-                    >
+                </TableHeader>
+                <TableBody>
+                  {alertas.map((alerta, index) => (
+                    <TableRow key={`${alerta.codigo_cliente}-${alerta.tipo}-${index}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getSeverityIcon(alerta.severidad)}
+                          <Badge className={getSeverityBadge(alerta.severidad)}>
+                            {alerta.severidad.toUpperCase()}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {alerta.tipo.replace(/_/g, " ")}
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         <Link
                           href={`/clientes/${alerta.codigo_cliente}`}
                           className="font-medium text-blue-600 hover:underline"
                         >
-                          {alerta.codigo_cliente}
+                          {alerta.razon_social || alerta.codigo_cliente}
                         </Link>
-                        <div className="text-sm text-slate-500">
-                          {alerta.razon_social || "-"}
-                        </div>
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {alerta.num_pedido}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(alerta.fecha_pedido), "dd MMM yyyy")}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {formatCurrency(alerta.valor_pedido)}
-                      </TableCell>
-                      <TableCell>{alerta.no_factura}</TableCell>
-                      <TableCell>
-                        <Badge className={getMoraColor(alerta.mora)}>
-                          {alerta.mora} días
-                        </Badge>
+                      <TableCell>{alerta.ciudad || "-"}</TableCell>
+                      <TableCell className="text-sm max-w-xs truncate">
+                        {alerta.descripcion}
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(alerta.valor_factura)}
+                        {formatCurrency(alerta.valor)}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
