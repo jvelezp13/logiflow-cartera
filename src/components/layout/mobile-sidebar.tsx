@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Users,
   FileText,
+  AlertTriangle,
   Bell,
   Settings,
   TrendingDown,
@@ -25,6 +26,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Clientes", href: "/clientes", icon: Users },
   { name: "Facturas", href: "/facturas", icon: FileText },
+  { name: "Pre-facturacion", href: "/pre-facturacion", icon: AlertTriangle },
   { name: "Alertas", href: "/alertas", icon: Bell },
 ];
 

@@ -17,6 +17,24 @@ export type {
   CiudadResumen,
 } from "./cartera";
 
+// --- Tipos Pre-facturacion ---
+
+export interface PedidoPreFacturacion {
+  num_pedido: string;
+  fecha: string;
+  codigo_cliente: string;
+  nombre_negocio: string | null;
+  nombre_asesor: string | null;
+  pedido_total: number | null;
+  maxima_mora: number;
+  total_vencido: number;
+  severidad: "atencion" | "critico";
+  // Campos de cupo (modo cupo)
+  cupo_asignado: number | null;
+  total_deuda: number;
+  cupo_disponible: number | null;
+}
+
 import type {
   DashboardKPIs,
   ClienteEnriquecido,
@@ -394,4 +412,172 @@ export async function getSegmentos(): Promise<string[]> {
 
   if (error) throw error;
   return (data as string[]) || [];
+}
+
+// --- Pre-facturacion ---
+
+/**
+ * Pedidos sin descargar de clientes con mora > 5 dias.
+ * Estrategia: 2 queries secuenciales para evitar N+1.
+ */
+export async function getPedidosPreFacturacion(): Promise<PedidoPreFacturacion[]> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  // Ultimos 7 dias fijo
+  const fechaLimite = new Date();
+  fechaLimite.setDate(fechaLimite.getDate() - 7);
+
+  // Query 1: pedidos sin descargar en los ultimos 7 dias
+  const { data: pedidosRaw, error: errorPedidos } = await supabase
+    .from("vista_pedidos_enriquecida")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("estado", "Sin Descargar")
+    .eq("tipo", "PEDIDO")
+    .gte("fecha", fechaLimite.toISOString().split("T")[0])
+    .order("fecha", { ascending: false });
+
+  if (errorPedidos) throw errorPedidos;
+  if (!pedidosRaw || pedidosRaw.length === 0) return [];
+
+  // Extraer codigos unicos de clientes
+  const codigosUnicos = [...new Set(pedidosRaw.map((p) => p.codigo_cliente as string))];
+
+  // Query 2: solo clientes con mora > 5 (atencion o critico)
+  const { data: clientesRaw, error: errorClientes } = await supabase
+    .from("vista_cliente_resumen")
+    .select("codigo_cliente, nombre_negocio, maxima_mora, total_vencido, cupo_asignado, total_deuda")
+    .eq("tenant_id", tenantId)
+    .in("codigo_cliente", codigosUnicos)
+    .gt("maxima_mora", 5);
+
+  if (errorClientes) throw errorClientes;
+
+  // Map para lookup rapido
+  const clientesMap = new Map(
+    (clientesRaw || []).map((c) => [c.codigo_cliente, c])
+  );
+
+  // Filtrar y enriquecer pedidos
+  const pedidos: PedidoPreFacturacion[] = [];
+  for (const p of pedidosRaw) {
+    const cliente = clientesMap.get(p.codigo_cliente);
+    if (!cliente) continue;
+
+    const pedidoTotal = Number(p.pedido_total || 0);
+    const cupoAsignado = cliente.cupo_asignado != null ? Number(cliente.cupo_asignado) : null;
+    const totalDeuda = Number(cliente.total_deuda || 0);
+    const cupoDisponible = cupoAsignado != null
+      ? cupoAsignado - totalDeuda - pedidoTotal
+      : null;
+
+    const severidad: "atencion" | "critico" = cliente.maxima_mora > 20 ? "critico" : "atencion";
+    pedidos.push({
+      num_pedido: p.num_pedido,
+      fecha: p.fecha,
+      codigo_cliente: p.codigo_cliente,
+      nombre_negocio: cliente.nombre_negocio,
+      nombre_asesor: p.nombre_asesor,
+      pedido_total: p.pedido_total,
+      maxima_mora: cliente.maxima_mora,
+      total_vencido: cliente.total_vencido,
+      severidad,
+      cupo_asignado: cupoAsignado,
+      total_deuda: totalDeuda,
+      cupo_disponible: cupoDisponible,
+    });
+  }
+
+  pedidos.sort((a, b) => b.maxima_mora - a.maxima_mora);
+  return pedidos;
+}
+
+// --- Pre-facturacion: Cupo excedido (agrupado por cliente) ---
+
+export interface ClienteCupoExcedido {
+  codigo_cliente: string;
+  nombre_negocio: string | null;
+  cantidad_pedidos: number;
+  total_pedidos: number;
+  cupo_asignado: number;
+  total_deuda: number;
+  excede_por: number;
+}
+
+/**
+ * Clientes cuya deuda + suma de pedidos pendientes excede su cupo.
+ * Agrupa todos los pedidos del mismo cliente para un calculo correcto.
+ */
+export async function getClientesCupoExcedido(): Promise<ClienteCupoExcedido[]> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const fechaLimite = new Date();
+  fechaLimite.setDate(fechaLimite.getDate() - 7);
+
+  // Query 1: pedidos sin descargar ultimos 7 dias
+  const { data: pedidosRaw, error: errorPedidos } = await supabase
+    .from("vista_pedidos_enriquecida")
+    .select("codigo_cliente, pedido_total")
+    .eq("tenant_id", tenantId)
+    .eq("estado", "Sin Descargar")
+    .eq("tipo", "PEDIDO")
+    .gte("fecha", fechaLimite.toISOString().split("T")[0]);
+
+  if (errorPedidos) throw errorPedidos;
+  if (!pedidosRaw || pedidosRaw.length === 0) return [];
+
+  // Agrupar pedidos por cliente: sumar totales y contar
+  const pedidosPorCliente = new Map<string, { total: number; cantidad: number }>();
+  for (const p of pedidosRaw) {
+    const codigo = p.codigo_cliente as string;
+    const monto = Number(p.pedido_total || 0);
+    const existing = pedidosPorCliente.get(codigo);
+    if (existing) {
+      existing.total += monto;
+      existing.cantidad += 1;
+    } else {
+      pedidosPorCliente.set(codigo, { total: monto, cantidad: 1 });
+    }
+  }
+
+  const codigosUnicos = [...pedidosPorCliente.keys()];
+
+  // Query 2: datos de clientes con cupo asignado
+  const { data: clientesRaw, error: errorClientes } = await supabase
+    .from("vista_cliente_resumen")
+    .select("codigo_cliente, nombre_negocio, cupo_asignado, total_deuda")
+    .eq("tenant_id", tenantId)
+    .in("codigo_cliente", codigosUnicos)
+    .not("cupo_asignado", "is", null);
+
+  if (errorClientes) throw errorClientes;
+
+  const resultado: ClienteCupoExcedido[] = [];
+  for (const cliente of clientesRaw || []) {
+    const cupo = Number(cliente.cupo_asignado || 0);
+    if (cupo <= 0) continue;
+
+    const deuda = Number(cliente.total_deuda || 0);
+    const pedidosInfo = pedidosPorCliente.get(cliente.codigo_cliente)!;
+    const totalConPedidos = deuda + pedidosInfo.total;
+
+    // Solo incluir si (deuda + todos los pedidos) excede el cupo
+    if (totalConPedidos <= cupo) continue;
+
+    resultado.push({
+      codigo_cliente: cliente.codigo_cliente,
+      nombre_negocio: cliente.nombre_negocio,
+      cantidad_pedidos: pedidosInfo.cantidad,
+      total_pedidos: pedidosInfo.total,
+      cupo_asignado: cupo,
+      total_deuda: deuda,
+      excede_por: totalConPedidos - cupo,
+    });
+  }
+
+  // Mas excedido primero
+  resultado.sort((a, b) => b.excede_por - a.excede_por);
+  return resultado;
 }
