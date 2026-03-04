@@ -1,7 +1,6 @@
 "use client";
 
-import { Bell, User, LogOut, Menu } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { User, LogOut, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,12 +8,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/app/login/actions";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { AppRole } from "@/lib/auth/types";
 
 interface HeaderProps {
   titulo: string;
-  alertasCount?: number;
   userName?: string | null;
   userRole?: AppRole | null;
   onMenuToggle?: () => void;
@@ -22,7 +19,6 @@ interface HeaderProps {
 
 export function Header({
   titulo,
-  alertasCount = 0,
   userName,
   userRole,
   onMenuToggle,
@@ -43,22 +39,6 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-4">
-        <ThemeToggle />
-        <button
-          className="relative p-2 rounded-full hover:bg-slate-100 transition-colors"
-          aria-label="Notificaciones"
-        >
-          <Bell className="h-5 w-5 text-slate-600" />
-          {alertasCount > 0 && (
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-            >
-              {alertasCount > 99 ? "99+" : alertasCount}
-            </Badge>
-          )}
-        </button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

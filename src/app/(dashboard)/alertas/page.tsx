@@ -59,7 +59,6 @@ export default async function AlertasPage() {
     <>
       <Header
         titulo="Alertas"
-        alertasCount={alertas.length}
         userName={profile.full_name}
         userRole={profile.role}
       />

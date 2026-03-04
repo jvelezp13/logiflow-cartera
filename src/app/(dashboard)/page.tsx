@@ -29,7 +29,6 @@ export default async function DashboardPage() {
     <>
       <Header
         titulo="Dashboard"
-        alertasCount={alertas.length}
         userName={profile.full_name}
         userRole={profile.role}
       />
