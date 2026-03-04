@@ -285,6 +285,7 @@ export async function getDetalleCliente(codigoCliente: string): Promise<{
       .eq("tenant_id", tenantId)
       .eq("codigo_cliente", codigoCliente)
       .eq("tipo", "PEDIDO")
+      .gte("fecha", new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0])
       .order("fecha", { ascending: false })
       .limit(10),
   ]);
