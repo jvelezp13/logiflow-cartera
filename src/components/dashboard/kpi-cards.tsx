@@ -28,11 +28,13 @@ const GRUPOS = [
 
 interface KpiCardsProps {
   data: EnvejecimientoRango[];
+  totalClientes: number;
 }
 
-export function KpiCards({ data }: KpiCardsProps) {
+export function KpiCards({ data, totalClientes }: KpiCardsProps) {
   const granTotal = data.reduce((sum, r) => sum + r.total, 0);
   const totalFacturas = data.reduce((sum, r) => sum + r.cantidad_facturas, 0);
+
   const items = GRUPOS.map((grupo) => {
     const rangos = data.filter((d) => grupo.rangos.includes(d.label));
     const total = rangos.reduce((sum, r) => sum + r.total, 0);
@@ -40,9 +42,6 @@ export function KpiCards({ data }: KpiCardsProps) {
     const clientes = rangos.reduce((sum, r) => sum + r.cantidad_clientes, 0);
     return { ...grupo, total, facturas, clientes };
   });
-
-  // Un cliente puede aparecer en multiples rangos, la suma es aproximada
-  const totalClientesSum = items.reduce((sum, i) => sum + i.clientes, 0);
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -53,7 +52,7 @@ export function KpiCards({ data }: KpiCardsProps) {
             {formatCurrencyShort(granTotal)}
           </p>
           <p className="text-xs text-slate-400">
-            {totalFacturas} facturas  ·  {totalClientesSum} clientes
+            {totalFacturas} facturas  ·  {totalClientes} clientes
           </p>
         </CardContent>
       </Card>

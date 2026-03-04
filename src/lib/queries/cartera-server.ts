@@ -74,6 +74,24 @@ export async function getEnvejecimiento(): Promise<EnvejecimientoRango[]> {
   return (data as EnvejecimientoRango[]) || [];
 }
 
+export async function getTotalClientesUnicos(): Promise<number> {
+  const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("vista_cliente_resumen")
+    .select("*", { count: "exact", head: true })
+    .eq("tenant_id", tenantId);
+
+  if (!incluirCastigada) {
+    query = query.lte("maxima_mora", 90);
+  }
+
+  const { count } = await query;
+  return count || 0;
+}
+
 export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecido[]> {
   const tenantId = await getTenantId();
   const incluirCastigada = await getIncluirCastigada();
