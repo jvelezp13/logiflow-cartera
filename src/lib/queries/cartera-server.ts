@@ -176,7 +176,7 @@ export async function getPedidosPendientes(
   return (data as PedidoEnriquecido[]) || [];
 }
 
-// --- Clientes ---
+// --- Facturas ---
 
 // Rangos de envejecimiento con sus limites de mora
 const RANGOS_MORA: Record<string, [number, number]> = {
@@ -190,6 +190,79 @@ const RANGOS_MORA: Record<string, [number, number]> = {
   "61-90":   [ 61,        90  ],
   "90+":     [ 91,  Infinity  ],
 };
+
+export async function getFacturasConFiltros(options?: {
+  busqueda?: string;
+  ciudad?: string;
+  severidad?: "tolerable" | "atencion" | "critico";
+  rango?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ facturas: import("./cartera").FacturaEnriquecida[]; total: number }> {
+  const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("vista_cartera_enriquecida")
+    .select("*", { count: "exact" })
+    .eq("tenant_id", tenantId);
+
+  // Filtrar castigada (mora > 90)
+  if (!incluirCastigada) {
+    query = query.eq("es_castigada", false);
+  }
+
+  // Busqueda por factura o cliente
+  if (options?.busqueda) {
+    const sanitized = sanitizeSearchInput(options.busqueda);
+    if (sanitized) {
+      query = query.or(
+        `no_factura.ilike.%${sanitized}%,razon_social.ilike.%${sanitized}%,nombre_negocio.ilike.%${sanitized}%,codigo_cliente.ilike.%${sanitized}%`
+      );
+    }
+  }
+
+  if (options?.ciudad) {
+    query = query.eq("ciudad", options.ciudad);
+  }
+
+  // Filtro por severidad basado en mora de la factura
+  if (options?.severidad === "tolerable") {
+    query = query.lte("mora", 5);
+  } else if (options?.severidad === "atencion") {
+    query = query.gt("mora", 5).lte("mora", 20);
+  } else if (options?.severidad === "critico") {
+    query = query.gt("mora", 20);
+  }
+
+  // Filtro por rango de envejecimiento
+  if (options?.rango && RANGOS_MORA[options.rango]) {
+    const [min, max] = RANGOS_MORA[options.rango];
+    if (min === -Infinity) {
+      query = query.lte("mora", max);
+    } else if (max === Infinity) {
+      query = query.gt("mora", 90);
+    } else {
+      query = query.gte("mora", min).lte("mora", max);
+    }
+  }
+
+  const { data, error, count } = await query
+    .order("mora", { ascending: false })
+    .range(
+      options?.offset || 0,
+      (options?.offset || 0) + (options?.limit || 50) - 1
+    );
+
+  if (error) throw error;
+  return {
+    facturas: (data as import("./cartera").FacturaEnriquecida[]) || [],
+    total: count || 0,
+  };
+}
+
+// --- Clientes ---
 
 export async function getClientesConSaldo(options?: {
   busqueda?: string;

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
-  Clock,
+  FileText,
   Bell,
   Settings,
   TrendingDown,
@@ -24,7 +24,7 @@ import type { AppRole } from "@/lib/auth/types";
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Clientes", href: "/clientes", icon: Users },
-  { name: "Envejecimiento", href: "/envejecimiento", icon: Clock },
+  { name: "Facturas", href: "/facturas", icon: FileText },
   { name: "Alertas", href: "/alertas", icon: Bell },
 ];
 

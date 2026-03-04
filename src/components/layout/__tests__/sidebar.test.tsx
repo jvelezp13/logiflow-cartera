@@ -13,7 +13,7 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Clientes")).toBeInTheDocument();
-    expect(screen.getByText("Envejecimiento")).toBeInTheDocument();
+    expect(screen.getByText("Facturas")).toBeInTheDocument();
     expect(screen.getByText("Alertas")).toBeInTheDocument();
     expect(screen.getByText("Configuracion")).toBeInTheDocument();
   });
