@@ -178,11 +178,24 @@ export async function getPedidosPendientes(
 
 // --- Clientes ---
 
+// Rangos de envejecimiento con sus limites de mora
+const RANGOS_MORA: Record<string, [number, number]> = {
+  "al_dia":  [  -Infinity, 0  ],
+  "1-5":     [  1,         5  ],
+  "6-10":    [  6,        10  ],
+  "11-15":   [ 11,        15  ],
+  "16-20":   [ 16,        20  ],
+  "21-30":   [ 21,        30  ],
+  "31-60":   [ 31,        60  ],
+  "61-90":   [ 61,        90  ],
+  "90+":     [ 91,  Infinity  ],
+};
+
 export async function getClientesConSaldo(options?: {
   busqueda?: string;
   ciudad?: string;
-  segmento?: string;
-  solo_vencidos?: boolean;
+  severidad?: "tolerable" | "atencion" | "critico";
+  rango?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ clientes: ClienteEnriquecido[]; total: number }> {
@@ -203,7 +216,7 @@ export async function getClientesConSaldo(options?: {
     const sanitized = sanitizeSearchInput(options.busqueda);
     if (sanitized) {
       query = query.or(
-        `razon_social.ilike.%${sanitized}%,codigo_cliente.ilike.%${sanitized}%`
+        `razon_social.ilike.%${sanitized}%,codigo_cliente.ilike.%${sanitized}%,nombre_negocio.ilike.%${sanitized}%`
       );
     }
   }
@@ -212,12 +225,25 @@ export async function getClientesConSaldo(options?: {
     query = query.eq("ciudad", options.ciudad);
   }
 
-  if (options?.segmento) {
-    query = query.eq("segmento", options.segmento);
+  // Filtro por severidad basado en maxima_mora
+  if (options?.severidad === "tolerable") {
+    query = query.lte("maxima_mora", 5);
+  } else if (options?.severidad === "atencion") {
+    query = query.gt("maxima_mora", 5).lte("maxima_mora", 20);
+  } else if (options?.severidad === "critico") {
+    query = query.gt("maxima_mora", 20);
   }
 
-  if (options?.solo_vencidos) {
-    query = query.gt("total_vencido", 0);
+  // Filtro por rango de envejecimiento
+  if (options?.rango && RANGOS_MORA[options.rango]) {
+    const [min, max] = RANGOS_MORA[options.rango];
+    if (min === -Infinity) {
+      query = query.lte("maxima_mora", max);
+    } else if (max === Infinity) {
+      query = query.gt("maxima_mora", 90);
+    } else {
+      query = query.gte("maxima_mora", min).lte("maxima_mora", max);
+    }
   }
 
   const { data, error, count } = await query
