@@ -1,4 +1,5 @@
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import { getTenants } from "./actions";
 
 export default async function TenantsPage() {
   const profile = await getUserProfile();
+  const incluirCastigada = await getIncluirCastigada();
 
   // Solo super_admin puede acceder
   if (profile.role !== "super_admin") {
@@ -29,6 +31,7 @@ export default async function TenantsPage() {
         titulo="Tenants"
         userName={profile.full_name}
         userRole={profile.role}
+        incluirCastigada={incluirCastigada}
       />
 
       <div className="p-6 space-y-6">

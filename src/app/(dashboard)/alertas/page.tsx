@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getAlertasCompletas } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 import { formatCurrencyShort } from "@/lib/format";
 import Link from "next/link";
 import { AlertTriangle, AlertCircle, AlertOctagon, Info } from "lucide-react";
@@ -43,6 +44,7 @@ function getSeverityBadgeClass(severidad: string) {
 
 export default async function AlertasPage() {
   const profile = await getUserProfile();
+  const incluirCastigada = await getIncluirCastigada();
   const alertas = await getAlertasCompletas();
 
   // Agrupar alertas por tipo
@@ -61,6 +63,7 @@ export default async function AlertasPage() {
         titulo="Alertas"
         userName={profile.full_name}
         userRole={profile.role}
+        incluirCastigada={incluirCastigada}
       />
 
       <div className="p-6 space-y-6">

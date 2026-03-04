@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
 import type { AppRole } from "./types";
 import { APP_ID } from "./types";
 
@@ -13,10 +14,9 @@ export interface UserProfile {
 
 /**
  * Obtiene el perfil completo del usuario autenticado.
- * El role se obtiene via JOIN con app_permissions para esta app.
- * Lanza error si no hay sesion, perfil, o permiso para esta app.
+ * Cacheado con React cache() -- se ejecuta 1 sola vez por request.
  */
-export async function getUserProfile(): Promise<UserProfile> {
+export const getUserProfile = cache(async function getUserProfile(): Promise<UserProfile> {
   const supabase = await createClient();
 
   const {
@@ -50,7 +50,7 @@ export async function getUserProfile(): Promise<UserProfile> {
     is_active: profile.is_active,
     role: permissions[0].role,
   };
-}
+});
 
 /**
  * Obtiene solo el tenant_id del usuario autenticado.

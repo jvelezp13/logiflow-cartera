@@ -1,4 +1,5 @@
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import { getUsuarios } from "./actions";
 
 export default async function UsuariosPage() {
   const profile = await getUserProfile();
+  const incluirCastigada = await getIncluirCastigada();
 
   // Solo admin y super_admin pueden acceder
   if (profile.role === "viewer") {
@@ -35,6 +37,7 @@ export default async function UsuariosPage() {
         titulo="Usuarios"
         userName={profile.full_name}
         userRole={profile.role}
+        incluirCastigada={incluirCastigada}
       />
 
       <div className="p-6 space-y-6">

@@ -24,7 +24,6 @@ describe("KpiCards", () => {
   it("muestra los valores formateados correctamente", () => {
     render(<KpiCards kpis={mockKpis} alertasCount={7} />);
 
-    // Cada valor es unico en el mock
     expect(screen.getByText("$8.5M")).toBeInTheDocument();
     expect(screen.getByText("$2.3M")).toBeInTheDocument();
     expect(screen.getByText("$6.2M")).toBeInTheDocument();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Header } from "@/components/layout/header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,22 @@ import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
 
+// Leer cookie de castigada en el cliente
+function subscribeCookie(cb: () => void) {
+  const interval = setInterval(cb, 500);
+  return () => clearInterval(interval);
+}
+function getCastigadaSnapshot() {
+  return document.cookie.includes("incluir_castigada=true");
+}
+function getCastigadaServerSnapshot() {
+  return false;
+}
+
 export default function ClientesPage() {
+  const incluirCastigada = useSyncExternalStore(
+    subscribeCookie, getCastigadaSnapshot, getCastigadaServerSnapshot
+  );
   const [clientes, setClientes] = useState<ClienteEnriquecido[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -76,7 +91,7 @@ export default function ClientesPage() {
 
   return (
     <>
-      <Header titulo="Clientes" />
+      <Header titulo="Clientes" incluirCastigada={incluirCastigada} />
 
       <div className="p-6 space-y-6">
         {/* Filtros */}

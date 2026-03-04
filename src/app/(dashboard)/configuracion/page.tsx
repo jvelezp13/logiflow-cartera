@@ -1,9 +1,11 @@
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 
 export default async function ConfiguracionPage() {
   const profile = await getUserProfile();
+  const incluirCastigada = await getIncluirCastigada();
 
   return (
     <>
@@ -11,6 +13,7 @@ export default async function ConfiguracionPage() {
         titulo="Configuracion"
         userName={profile.full_name}
         userRole={profile.role}
+        incluirCastigada={incluirCastigada}
       />
 
       <div className="p-6 space-y-6">

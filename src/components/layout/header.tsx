@@ -8,12 +8,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/app/login/actions";
+import { ToggleCastigada } from "@/components/toggle-castigada";
 import type { AppRole } from "@/lib/auth/types";
 
 interface HeaderProps {
   titulo: string;
   userName?: string | null;
   userRole?: AppRole | null;
+  incluirCastigada?: boolean;
   onMenuToggle?: () => void;
 }
 
@@ -21,6 +23,7 @@ export function Header({
   titulo,
   userName,
   userRole,
+  incluirCastigada = false,
   onMenuToggle,
 }: HeaderProps) {
   return (
@@ -39,6 +42,7 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-4">
+        <ToggleCastigada incluirCastigada={incluirCastigada} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

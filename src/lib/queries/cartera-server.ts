@@ -4,6 +4,7 @@
  */
 import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 
 // Re-exportar interfaces para uso en componentes
 export type {
@@ -32,10 +33,12 @@ function sanitizeSearchInput(input: string): string {
 
 export async function getDashboardKPIs(): Promise<DashboardKPIs> {
   const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_dashboard_kpis", {
     p_tenant_id: tenantId,
+    p_incluir_castigada: incluirCastigada,
   });
 
   if (error) throw error;
@@ -57,10 +60,12 @@ export async function getDashboardKPIs(): Promise<DashboardKPIs> {
 
 export async function getEnvejecimiento(): Promise<EnvejecimientoRango[]> {
   const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_envejecimiento", {
     p_tenant_id: tenantId,
+    p_incluir_castigada: incluirCastigada,
   });
 
   if (error) throw error;
@@ -69,14 +74,22 @@ export async function getEnvejecimiento(): Promise<EnvejecimientoRango[]> {
 
 export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecido[]> {
   const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("vista_cliente_resumen")
     .select("*")
     .eq("tenant_id", tenantId)
     .order("total_deuda", { ascending: false })
     .limit(limit);
+
+  // Filtrar clientes cuya mora maxima supera 90 dias
+  if (!incluirCastigada) {
+    query = query.lte("maxima_mora", 90);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return (data as ClienteEnriquecido[]) || [];
@@ -84,10 +97,12 @@ export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecid
 
 export async function getAlertasCompletas(): Promise<AlertaCompleta[]> {
   const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_alertas_completas", {
     p_tenant_id: tenantId,
+    p_incluir_castigada: incluirCastigada,
   });
 
   if (error) throw error;
@@ -112,7 +127,6 @@ export async function getPedidosPendientes(
     .gte("fecha", fechaLimite.toISOString().split("T")[0])
     .order("fecha", { ascending: false })
     .limit(limit);
-
   if (error) throw error;
   return (data as PedidoEnriquecido[]) || [];
 }
@@ -128,12 +142,17 @@ export async function getClientesConSaldo(options?: {
   offset?: number;
 }): Promise<{ clientes: ClienteEnriquecido[]; total: number }> {
   const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
 
   let query = supabase
     .from("vista_cliente_resumen")
     .select("*", { count: "exact" })
     .eq("tenant_id", tenantId);
+
+  if (!incluirCastigada) {
+    query = query.lte("maxima_mora", 90);
+  }
 
   if (options?.busqueda) {
     const sanitized = sanitizeSearchInput(options.busqueda);

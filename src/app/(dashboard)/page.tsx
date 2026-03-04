@@ -12,9 +12,11 @@ import {
   getPedidosPendientes,
 } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 
 export default async function DashboardPage() {
   const profile = await getUserProfile();
+  const incluirCastigada = await getIncluirCastigada();
 
   const [kpis, envejecimiento, topClientes, alertas, pedidosPendientes] =
     await Promise.all([
@@ -31,6 +33,7 @@ export default async function DashboardPage() {
         titulo="Dashboard"
         userName={profile.full_name}
         userRole={profile.role}
+        incluirCastigada={incluirCastigada}
       />
 
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">

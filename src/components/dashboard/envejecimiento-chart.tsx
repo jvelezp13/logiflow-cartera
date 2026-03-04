@@ -1,18 +1,33 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrencyShort } from "@/lib/format";
-import { CHART_COLORS } from "@/lib/constants";
-import type { EnvejecimientoRango } from "@/lib/queries/cartera-server";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
+import { formatCurrencyShort } from "@/lib/format";
+import type { EnvejecimientoRango } from "@/lib/queries/cartera-server";
+
+// Colores semanticos: verde (al dia) -> rojo (critico)
+// Escala semantica: verde (tolerable) -> amarillo -> naranja -> rojo (critico)
+const RANGE_COLORS: Record<string, string> = {
+  "Al dia": "#22c55e",
+  "1-5 dias": "#4ade80",
+  "6-10 dias": "#facc15",
+  "11-15 dias": "#eab308",
+  "16-20 dias": "#f59e0b",
+  "21-30 dias": "#f97316",
+  "31-60 dias": "#ef4444",
+  "61-90 dias": "#dc2626",
+  "90+ dias": "#991b1b",
+};
+
+const chartConfig = {
+  total: { label: "Total" },
+} satisfies ChartConfig;
 
 interface EnvejecimientoChartProps {
   data: EnvejecimientoRango[];
@@ -21,38 +36,51 @@ interface EnvejecimientoChartProps {
 export function EnvejecimientoChart({ data }: EnvejecimientoChartProps) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Envejecimiento de Cartera</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Envejecimiento de Cartera</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical">
-              <XAxis type="number" tickFormatter={(v) => formatCurrencyShort(v as number)} />
-              <YAxis type="category" dataKey="label" width={80} />
-              <Tooltip formatter={(v) => formatCurrencyShort(Number(v))} />
-              <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          {data.map((rango, index) => (
-            <div key={rango.label} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: CHART_COLORS[index] }}
+        <ChartContainer config={chartConfig} className="h-[220px] w-full">
+          <BarChart accessibilityLayer data={data}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="label"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              fontSize={12}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => formatCurrencyShort(v as number)}
+              fontSize={12}
+              width={60}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  formatter={(value, _name, item) => (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium">{formatCurrencyShort(Number(value))}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.payload.cantidad_facturas} facturas ({item.payload.porcentaje.toFixed(1)}%)
+                      </span>
+                    </div>
+                  )}
                 />
-                <span>{rango.label}</span>
-              </div>
-              <span className="font-medium">{rango.porcentaje.toFixed(1)}%</span>
-            </div>
-          ))}
-        </div>
+              }
+            />
+            <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+              {data.map((entry) => (
+                <Cell
+                  key={entry.label}
+                  fill={RANGE_COLORS[entry.label] || "#94a3b8"}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

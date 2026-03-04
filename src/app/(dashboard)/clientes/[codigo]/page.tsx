@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { getDetalleCliente } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { getIncluirCastigada } from "@/lib/castigada";
 import { formatCurrencyFull } from "@/lib/format";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -46,6 +47,7 @@ export default async function DetalleClientePage({
 }) {
   const { codigo } = await params;
   const profile = await getUserProfile();
+  const incluirCastigada = await getIncluirCastigada();
   const { info, facturas, pedidos } = await getDetalleCliente(codigo);
 
   if (!info) {
@@ -60,6 +62,7 @@ export default async function DetalleClientePage({
         titulo={`Cliente: ${codigo}`}
         userName={profile.full_name}
         userRole={profile.role}
+        incluirCastigada={incluirCastigada}
       />
 
       <div className="p-6 space-y-6">
