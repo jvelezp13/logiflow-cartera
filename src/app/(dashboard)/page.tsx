@@ -5,7 +5,6 @@ import { DistribucionPie } from "@/components/dashboard/distribucion-pie";
 import { TopClientesTable } from "@/components/dashboard/top-clientes-table";
 import { TopCiudadesTable } from "@/components/dashboard/top-ciudades-table";
 import {
-  getDashboardKPIs,
   getEnvejecimiento,
   getTopClientesDeuda,
   getTopCiudadesDeuda,
@@ -17,8 +16,7 @@ export default async function DashboardPage() {
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
 
-  const [kpis, envejecimiento, topClientes, topCiudades] = await Promise.all([
-    getDashboardKPIs(),
+  const [envejecimiento, topClientes, topCiudades] = await Promise.all([
     getEnvejecimiento(),
     getTopClientesDeuda(),
     getTopCiudadesDeuda(100),
@@ -34,7 +32,7 @@ export default async function DashboardPage() {
       />
 
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        <KpiCards kpis={kpis} />
+        <KpiCards data={envejecimiento} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <EnvejecimientoChart data={envejecimiento} />
