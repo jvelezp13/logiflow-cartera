@@ -1,7 +1,6 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -13,6 +12,13 @@ import {
 import { formatCurrencyShort } from "@/lib/format";
 import type { ClienteEnriquecido } from "@/lib/queries/cartera-server";
 
+// Clasificacion por maxima_mora (mismos rangos que la torta)
+function getSeveridad(maxMora: number): { label: string; color: string } {
+  if (maxMora <= 5) return { label: "Tolerable", color: "text-green-600" };
+  if (maxMora <= 20) return { label: "Atencion", color: "text-yellow-600" };
+  return { label: "Critico", color: "text-red-600" };
+}
+
 interface TopClientesTableProps {
   clientes: ClienteEnriquecido[];
 }
@@ -20,47 +26,42 @@ interface TopClientesTableProps {
 export function TopClientesTable({ clientes }: TopClientesTableProps) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Top 10 - Clientes con Mayor Deuda</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Top 10 - Mayor Deuda</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-3">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Ciudad</TableHead>
-              <TableHead>Segmento</TableHead>
-              <TableHead className="text-right">Deuda Total</TableHead>
-              <TableHead className="text-right">Vencido</TableHead>
+              <TableHead className="text-xs py-2">Negocio</TableHead>
+              <TableHead className="text-xs py-2">Ciudad</TableHead>
+              <TableHead className="text-xs py-2 text-right">Deuda</TableHead>
+              <TableHead className="text-xs py-2 text-right">Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {clientes.map((cliente) => (
-              <TableRow key={cliente.codigo_cliente}>
-                <TableCell>
-                  <div className="font-medium">{cliente.razon_social || cliente.codigo_cliente}</div>
-                  <div className="text-xs text-slate-500">{cliente.codigo_cliente}</div>
-                </TableCell>
-                <TableCell className="text-sm">{cliente.ciudad || "-"}</TableCell>
-                <TableCell className="text-sm">
-                  <Badge variant="outline" className="text-xs">
-                    {cliente.segmento?.split(" - ")[0] || "-"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
-                  {formatCurrencyShort(Number(cliente.total_deuda))}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {Number(cliente.total_vencido) > 0 ? (
-                    <span className="text-red-600 font-medium">
-                      {formatCurrencyShort(Number(cliente.total_vencido))}
+            {clientes.map((cliente) => {
+              const severidad = getSeveridad(cliente.maxima_mora);
+              return (
+                <TableRow key={cliente.codigo_cliente}>
+                  <TableCell className="py-1.5">
+                    <span className="text-sm font-medium">
+                      {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
                     </span>
-                  ) : (
-                    <span className="text-slate-400">-</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+                    <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
+                  </TableCell>
+                  <TableCell className="text-xs text-slate-500 py-1.5">
+                    {cliente.ciudad || "-"}
+                  </TableCell>
+                  <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
+                    {formatCurrencyShort(Number(cliente.total_deuda))}
+                  </TableCell>
+                  <TableCell className={`text-right text-xs font-medium py-1.5 ${severidad.color}`}>
+                    {severidad.label}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

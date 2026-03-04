@@ -25,8 +25,8 @@ export function AlertasPreview({ alertas }: AlertasPreviewProps) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Alertas</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base">Alertas</CardTitle>
         <Select value={filtro} onValueChange={setFiltro}>
           <SelectTrigger className="w-32" aria-label="Filtrar alertas por severidad">
             <SelectValue />

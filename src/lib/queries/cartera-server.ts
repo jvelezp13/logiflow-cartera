@@ -14,6 +14,7 @@ export type {
   PedidoEnriquecido,
   EnvejecimientoRango,
   AlertaCompleta,
+  CiudadResumen,
 } from "./cartera";
 
 import type {
@@ -22,6 +23,7 @@ import type {
   EnvejecimientoRango,
   AlertaCompleta,
   PedidoEnriquecido,
+  CiudadResumen,
 } from "./cartera";
 
 // Sanitizar input para evitar inyeccion en filtros PostgREST
@@ -93,6 +95,21 @@ export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecid
 
   if (error) throw error;
   return (data as ClienteEnriquecido[]) || [];
+}
+
+export async function getTopCiudadesDeuda(limit = 10): Promise<CiudadResumen[]> {
+  const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("get_top_ciudades_deuda", {
+    p_tenant_id: tenantId,
+    p_incluir_castigada: incluirCastigada,
+    p_limit: limit,
+  });
+
+  if (error) throw error;
+  return (data as CiudadResumen[]) || [];
 }
 
 export async function getAlertasCompletas(): Promise<AlertaCompleta[]> {

@@ -6,10 +6,13 @@ import type { DashboardKPIs } from "@/lib/queries/cartera-server";
 
 interface KpiCardsProps {
   kpis: DashboardKPIs;
-  alertasCount: number;
 }
 
-export function KpiCards({ kpis, alertasCount }: KpiCardsProps) {
+export function KpiCards({ kpis }: KpiCardsProps) {
+  const pctVencida = kpis.cartera_total > 0
+    ? ((kpis.cartera_vencida / kpis.cartera_total) * 100).toFixed(1)
+    : "0";
+
   const items = [
     {
       label: "Cartera Total",
@@ -30,9 +33,9 @@ export function KpiCards({ kpis, alertasCount }: KpiCardsProps) {
       accent: "border-l-emerald-500",
     },
     {
-      label: "Alertas",
-      value: String(alertasCount),
-      detail: "requieren atencion",
+      label: "% Vencida",
+      value: `${pctVencida}%`,
+      detail: "del total de cartera",
       accent: "border-l-amber-500",
     },
   ];

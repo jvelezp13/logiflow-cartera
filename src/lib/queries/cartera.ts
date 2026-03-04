@@ -82,6 +82,13 @@ export interface EnvejecimientoRango {
   porcentaje: number;
 }
 
+export interface CiudadResumen {
+  ciudad: string;
+  num_clientes: number;
+  total_deuda: number;
+  total_vencido: number;
+}
+
 export interface AlertaCompleta {
   tipo: "PEDIDOS_PENDIENTES" | "DEUDA_VENCIDA" | "CUPO_EXCEDIDO" | "CLIENTE_INACTIVO" | "SIN_CREDITO";
   severidad: "critica" | "alta" | "media" | "baja";
