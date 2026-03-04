@@ -9,8 +9,11 @@ import {
   Bell,
   Settings,
   TrendingDown,
+  UserCog,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AppRole } from "@/lib/auth/types";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -19,18 +22,38 @@ const navigation = [
   { name: "Alertas", href: "/alertas", icon: Bell },
 ];
 
-export function Sidebar() {
+// Items visibles solo para admin y super_admin
+const adminNavigation = [
+  { name: "Usuarios", href: "/usuarios", icon: UserCog },
+];
+
+// Items visibles solo para super_admin
+const superAdminNavigation = [
+  { name: "Tenants", href: "/tenants", icon: Building2 },
+];
+
+interface SidebarProps {
+  userRole?: AppRole | null;
+}
+
+export function Sidebar({ userRole }: SidebarProps) {
   const pathname = usePathname();
 
+  const allNavItems = [
+    ...navigation,
+    ...((userRole === "admin" || userRole === "super_admin") ? adminNavigation : []),
+    ...(userRole === "super_admin" ? superAdminNavigation : []),
+  ];
+
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-white w-64">
+    <div className="hidden md:flex flex-col h-full bg-slate-900 text-white w-64">
       <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-800">
         <TrendingDown className="h-6 w-6 text-blue-400" />
         <span className="text-lg font-semibold">Logiflow</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {navigation.map((item) => {
+      <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Navegacion principal">
+        {allNavItems.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -39,6 +62,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 isActive
@@ -56,6 +80,7 @@ export function Sidebar() {
       <div className="px-3 py-4 border-t border-slate-800">
         <Link
           href="/configuracion"
+          aria-current={pathname === "/configuracion" ? "page" : undefined}
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
             pathname === "/configuracion"
@@ -64,7 +89,7 @@ export function Sidebar() {
           )}
         >
           <Settings className="h-5 w-5" />
-          Configuración
+          Configuracion
         </Link>
       </div>
     </div>

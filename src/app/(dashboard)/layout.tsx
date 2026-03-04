@@ -1,14 +1,22 @@
-import { Sidebar } from "@/components/layout/sidebar";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getUserProfile } from "@/lib/auth/get-tenant";
+import { redirect } from "next/navigation";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let profile;
+  try {
+    profile = await getUserProfile();
+  } catch {
+    redirect("/login");
+  }
+
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto bg-slate-50">{children}</main>
-    </div>
+    <DashboardShell userRole={profile.role}>
+      {children}
+    </DashboardShell>
   );
 }
