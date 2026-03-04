@@ -13,7 +13,6 @@ export type {
   FacturaEnriquecida,
   PedidoEnriquecido,
   EnvejecimientoRango,
-  AlertaCompleta,
   CiudadResumen,
 } from "./cartera";
 
@@ -39,7 +38,6 @@ import type {
   DashboardKPIs,
   ClienteEnriquecido,
   EnvejecimientoRango,
-  AlertaCompleta,
   PedidoEnriquecido,
   CiudadResumen,
 } from "./cartera";
@@ -156,20 +154,6 @@ export async function getTopCiudadesDeuda(limit = 10): Promise<CiudadResumen[]> 
 
   if (error) throw error;
   return (data as CiudadResumen[]) || [];
-}
-
-export async function getAlertasCompletas(): Promise<AlertaCompleta[]> {
-  const tenantId = await getTenantId();
-  const incluirCastigada = await getIncluirCastigada();
-  const supabase = await createClient();
-
-  const { data, error } = await supabase.rpc("get_alertas_completas", {
-    p_tenant_id: tenantId,
-    p_incluir_castigada: incluirCastigada,
-  });
-
-  if (error) throw error;
-  return (data as AlertaCompleta[]) || [];
 }
 
 export async function getPedidosPendientes(
