@@ -45,3 +45,4 @@ supabase/.temp/
 
 # editor/tools
 opencode.json
+.mcp.json

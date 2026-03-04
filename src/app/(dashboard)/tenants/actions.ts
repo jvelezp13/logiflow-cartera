@@ -17,8 +17,8 @@ export async function getTenants() {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("tenants")
-    .select("id, name, is_active, created_at")
+    .from("sync_tenants")
+    .select("id, nombre, activo, created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -32,7 +32,9 @@ export async function createTenant(formData: FormData) {
   const name = formData.get("name") as string;
   if (!name) return { error: "El nombre es requerido" };
 
-  const { error } = await supabase.from("tenants").insert({ name });
+  // Generar slug a partir del nombre
+  const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  const { error } = await supabase.from("sync_tenants").insert({ nombre: name, slug });
 
   if (error) return { error: error.message };
   return { success: true };
@@ -43,8 +45,8 @@ export async function toggleTenantActive(tenantId: string, isActive: boolean) {
   const supabase = await createClient();
 
   const { error } = await supabase
-    .from("tenants")
-    .update({ is_active: isActive })
+    .from("sync_tenants")
+    .update({ activo: isActive })
     .eq("id", tenantId);
 
   if (error) return { error: error.message };

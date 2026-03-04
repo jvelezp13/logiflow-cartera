@@ -1,13 +1,8 @@
--- Tabla de tenants (organizaciones/empresas)
-CREATE TABLE IF NOT EXISTS public.tenants (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- NOTA: No se crea tabla tenants nueva.
+-- Se reutiliza la tabla sync_tenants existente (3 registros, 26 tablas la referencian).
+-- Columnas de sync_tenants: id, nombre, slug, activo, created_at, updated_at
 
--- Trigger para actualizar updated_at automaticamente
+-- Funcion helper para updated_at (usada por profiles y otras tablas)
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -15,10 +10,3 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER on_tenants_updated
-  BEFORE UPDATE ON public.tenants
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_updated_at();
-
-COMMENT ON TABLE public.tenants IS 'Organizaciones/empresas del sistema multi-tenant';

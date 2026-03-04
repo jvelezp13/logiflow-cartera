@@ -103,9 +103,9 @@ RETURNS JSON AS $$
       'Pedido pendiente con deuda vencida' AS titulo,
       'Cliente con pedido #' || p.num_pedido || ' sin descargar y con facturas vencidas' AS descripcion,
       p.codigo_cliente,
-      p.razon_social,
-      p.ciudad,
-      p.total::numeric AS valor,
+      p.pedido_cliente_nombre AS razon_social,
+      p.pedido_ciudad AS ciudad,
+      p.pedido_total::numeric AS valor,
       NULL::integer AS dias_mora,
       NULL::numeric AS porcentaje_utilizado,
       NULL::integer AS dias_sin_pedido

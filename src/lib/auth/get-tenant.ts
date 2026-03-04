@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "./types";
+import { APP_ID } from "./types";
 
 export interface UserProfile {
   id: string;
@@ -12,7 +13,8 @@ export interface UserProfile {
 
 /**
  * Obtiene el perfil completo del usuario autenticado.
- * Lanza error si no hay sesion o perfil.
+ * El role se obtiene via JOIN con app_permissions para esta app.
+ * Lanza error si no hay sesion, perfil, o permiso para esta app.
  */
 export async function getUserProfile(): Promise<UserProfile> {
   const supabase = await createClient();
@@ -26,17 +28,28 @@ export async function getUserProfile(): Promise<UserProfile> {
     throw new Error("No autenticado");
   }
 
+  // INNER JOIN: si no tiene permiso para esta app, retorna null
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, tenant_id, role, full_name, email, is_active")
+    .select("id, tenant_id, full_name, email, is_active, app_permissions!inner(role)")
     .eq("id", user.id)
+    .eq("app_permissions.app_id", APP_ID)
     .single();
 
   if (profileError || !profile) {
-    throw new Error("Perfil no encontrado");
+    throw new Error("Sin acceso a esta aplicacion");
   }
 
-  return profile as UserProfile;
+  // Extraer role del array de permisos
+  const permissions = profile.app_permissions as { role: AppRole }[];
+  return {
+    id: profile.id,
+    tenant_id: profile.tenant_id,
+    full_name: profile.full_name,
+    email: profile.email,
+    is_active: profile.is_active,
+    role: permissions[0].role,
+  };
 }
 
 /**

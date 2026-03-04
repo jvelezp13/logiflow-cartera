@@ -56,12 +56,12 @@ export default async function TenantsPage() {
                 ) : (
                   tenants.map((tenant) => (
                     <TableRow key={tenant.id}>
-                      <TableCell className="font-medium">{tenant.name}</TableCell>
+                      <TableCell className="font-medium">{tenant.nombre}</TableCell>
                       <TableCell className="font-mono text-xs text-slate-500">
                         {tenant.id}
                       </TableCell>
                       <TableCell>
-                        {tenant.is_active ? (
+                        {tenant.activo ? (
                           <Badge className="bg-green-100 text-green-800" variant="outline">
                             Activo
                           </Badge>

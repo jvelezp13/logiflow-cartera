@@ -1,10 +1,10 @@
--- Tipos de rol
+-- Tipo enum para roles
 CREATE TYPE public.app_role AS ENUM ('super_admin', 'admin', 'viewer');
 
--- Tabla de perfiles de usuario
+-- Tabla de perfiles de usuario (FK a sync_tenants, NO a tenants)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE RESTRICT,
+  tenant_id UUID NOT NULL REFERENCES public.sync_tenants(id) ON DELETE RESTRICT,
   role public.app_role NOT NULL DEFAULT 'viewer',
   full_name TEXT,
   email TEXT,
@@ -45,4 +45,13 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
 
-COMMENT ON TABLE public.profiles IS 'Perfiles de usuario con rol y tenant';
+-- Funciones helper para RLS (en public porque auth schema no permite funciones via API)
+CREATE OR REPLACE FUNCTION public.get_my_tenant_id()
+RETURNS UUID AS $$
+  SELECT tenant_id FROM public.profiles WHERE id = auth.uid()
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS public.app_role AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid()
+$$ LANGUAGE sql STABLE SECURITY DEFINER;

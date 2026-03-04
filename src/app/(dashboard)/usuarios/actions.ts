@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import type { AppRole } from "@/lib/auth/types";
+import { APP_ID } from "@/lib/auth/types";
 
 // Verificar que el usuario tiene permisos de admin
 async function requireAdmin() {
@@ -17,9 +18,11 @@ export async function getUsuarios() {
   const profile = await requireAdmin();
   const supabase = await createClient();
 
+  // JOIN con app_permissions para obtener el role por app
   const query = supabase
     .from("profiles")
-    .select("id, tenant_id, role, full_name, email, is_active, created_at")
+    .select("id, tenant_id, full_name, email, is_active, created_at, app_permissions!inner(role)")
+    .eq("app_permissions.app_id", APP_ID)
     .order("created_at", { ascending: false });
 
   // Admin solo ve usuarios de su tenant, super_admin ve todos
@@ -29,7 +32,20 @@ export async function getUsuarios() {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  // Transformar para mantener { role } en el shape esperado
+  return (data || []).map((u) => {
+    const permissions = u.app_permissions as { role: AppRole }[];
+    return {
+      id: u.id,
+      tenant_id: u.tenant_id,
+      full_name: u.full_name,
+      email: u.email,
+      is_active: u.is_active,
+      created_at: u.created_at,
+      role: permissions[0].role,
+    };
+  });
 }
 
 export async function createUsuario(formData: FormData) {
@@ -44,6 +60,7 @@ export async function createUsuario(formData: FormData) {
     : profile.tenant_id;
 
   // Crear usuario en auth con metadata para el trigger
+  // handle_new_user() crea profile + app_permissions automaticamente
   const { error } = await supabase.auth.admin.createUser({
     email,
     password: formData.get("password") as string,
@@ -52,6 +69,7 @@ export async function createUsuario(formData: FormData) {
       tenant_id: tenantId,
       role,
       full_name: fullName,
+      app_id: APP_ID,
     },
   });
 
@@ -66,24 +84,37 @@ export async function updateUsuario(userId: string, formData: FormData) {
   const profile = await requireAdmin();
   const supabase = await createClient();
 
-  const updates: Record<string, unknown> = {};
   const fullName = formData.get("full_name");
   const role = formData.get("role");
   const isActive = formData.get("is_active");
 
-  if (fullName) updates.full_name = fullName;
-  if (role) updates.role = role;
-  if (isActive !== null) updates.is_active = isActive === "true";
+  // Actualizar datos de perfil (full_name, is_active)
+  const profileUpdates: Record<string, unknown> = {};
+  if (fullName) profileUpdates.full_name = fullName;
+  if (isActive !== null) profileUpdates.is_active = isActive === "true";
 
-  const query = supabase.from("profiles").update(updates).eq("id", userId);
-
-  // Admin solo puede editar usuarios de su tenant
-  if (profile.role === "admin") {
-    query.eq("tenant_id", profile.tenant_id);
+  if (Object.keys(profileUpdates).length > 0) {
+    const query = supabase.from("profiles").update(profileUpdates).eq("id", userId);
+    if (profile.role === "admin") {
+      query.eq("tenant_id", profile.tenant_id);
+    }
+    const { error } = await query;
+    if (error) return { error: error.message };
   }
 
-  const { error } = await query;
-  if (error) return { error: error.message };
+  // Actualizar role en app_permissions (tabla separada)
+  if (role) {
+    const permQuery = supabase
+      .from("app_permissions")
+      .update({ role })
+      .eq("profile_id", userId)
+      .eq("app_id", APP_ID);
+    if (profile.role === "admin") {
+      permQuery.eq("tenant_id", profile.tenant_id);
+    }
+    const { error } = await permQuery;
+    if (error) return { error: error.message };
+  }
 
   return { success: true };
 }
