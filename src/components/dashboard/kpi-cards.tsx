@@ -32,17 +32,31 @@ interface KpiCardsProps {
 
 export function KpiCards({ data }: KpiCardsProps) {
   const granTotal = data.reduce((sum, r) => sum + r.total, 0);
-
+  const totalFacturas = data.reduce((sum, r) => sum + r.cantidad_facturas, 0);
   const items = GRUPOS.map((grupo) => {
     const rangos = data.filter((d) => grupo.rangos.includes(d.label));
     const total = rangos.reduce((sum, r) => sum + r.total, 0);
     const facturas = rangos.reduce((sum, r) => sum + r.cantidad_facturas, 0);
-    const pct = granTotal > 0 ? ((total / granTotal) * 100).toFixed(1) : "0";
-    return { ...grupo, total, facturas, pct };
+    const clientes = rangos.reduce((sum, r) => sum + r.cantidad_clientes, 0);
+    return { ...grupo, total, facturas, clientes };
   });
 
+  // Un cliente puede aparecer en multiples rangos, la suma es aproximada
+  const totalClientesSum = items.reduce((sum, i) => sum + i.clientes, 0);
+
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Card className="border-l-4 border-l-blue-500">
+        <CardContent className="py-3 px-4">
+          <p className="text-xs font-medium text-blue-600">Cartera Total</p>
+          <p className="text-xl font-semibold text-slate-900 tabular-nums">
+            {formatCurrencyShort(granTotal)}
+          </p>
+          <p className="text-xs text-slate-400">
+            {totalFacturas} facturas  ·  {totalClientesSum} clientes
+          </p>
+        </CardContent>
+      </Card>
       {items.map((item) => (
         <Card key={item.label} className={`border-l-4 ${item.accent}`}>
           <CardContent className="py-3 px-4">
@@ -51,7 +65,7 @@ export function KpiCards({ data }: KpiCardsProps) {
               {formatCurrencyShort(item.total)}
             </p>
             <p className="text-xs text-slate-400">
-              {item.facturas} facturas  ·  {item.pct}%
+              {item.facturas} facturas  ·  {item.clientes} clientes
             </p>
           </CardContent>
         </Card>

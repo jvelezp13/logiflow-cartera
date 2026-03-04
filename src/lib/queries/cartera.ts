@@ -79,6 +79,7 @@ export interface EnvejecimientoRango {
   label: string;
   total: number;
   cantidad_facturas: number;
+  cantidad_clientes: number;
   porcentaje: number;
 }
 
@@ -156,7 +157,7 @@ export async function getDashboardKPIs(tenantId: string = DEFAULT_TENANT_ID): Pr
 export async function getEnvejecimiento(tenantId: string = DEFAULT_TENANT_ID): Promise<EnvejecimientoRango[]> {
   const { data, error } = await client
     .from("vista_cartera_enriquecida")
-    .select("rango_mora, total")
+    .select("rango_mora, total, codigo_cliente")
     .eq("tenant_id", tenantId);
 
   if (error) throw error;
@@ -171,6 +172,7 @@ export async function getEnvejecimiento(tenantId: string = DEFAULT_TENANT_ID): P
       label: rango === "0" ? "Al día" : `${rango} días`,
       total,
       cantidad_facturas: filtered.length,
+      cantidad_clientes: new Set(filtered.map(f => f.codigo_cliente)).size,
       porcentaje: totalGeneral > 0 ? (total / totalGeneral) * 100 : 0,
     };
   });
