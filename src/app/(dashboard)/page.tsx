@@ -6,6 +6,7 @@ import { TopClientesTable } from "@/components/dashboard/top-clientes-table";
 import { TopCiudadesTable } from "@/components/dashboard/top-ciudades-table";
 import {
   getEnvejecimiento,
+  getResumenSeveridad,
   getTotalClientesUnicos,
   getTopClientesDeuda,
   getTopCiudadesDeuda,
@@ -17,8 +18,9 @@ export default async function DashboardPage() {
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
 
-  const [envejecimiento, totalClientes, topClientes, topCiudades] = await Promise.all([
+  const [envejecimiento, resumenSeveridad, totalClientes, topClientes, topCiudades] = await Promise.all([
     getEnvejecimiento(),
+    getResumenSeveridad(),
     getTotalClientesUnicos(),
     getTopClientesDeuda(),
     getTopCiudadesDeuda(100),
@@ -34,7 +36,7 @@ export default async function DashboardPage() {
       />
 
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        <KpiCards data={envejecimiento} totalClientes={totalClientes} />
+        <KpiCards severidad={resumenSeveridad} totalClientes={totalClientes} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <EnvejecimientoChart data={envejecimiento} />

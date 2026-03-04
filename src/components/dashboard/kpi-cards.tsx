@@ -2,46 +2,22 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrencyShort } from "@/lib/format";
-import type { EnvejecimientoRango } from "@/lib/queries/cartera-server";
+import type { ResumenSeveridad } from "@/lib/queries/cartera-server";
 
-// Mismos grupos que la torta de distribucion
-const GRUPOS = [
-  {
-    label: "Tolerable",
-    rangos: ["Al dia", "1-5 dias"],
-    accent: "border-l-green-500",
-    textColor: "text-green-600",
-  },
-  {
-    label: "Atencion",
-    rangos: ["6-10 dias", "11-15 dias", "16-20 dias"],
-    accent: "border-l-yellow-500",
-    textColor: "text-yellow-600",
-  },
-  {
-    label: "Critico",
-    rangos: ["21-30 dias", "31-60 dias", "61-90 dias", "90+ dias"],
-    accent: "border-l-red-500",
-    textColor: "text-red-600",
-  },
-];
+const ESTILOS: Record<string, { label: string; accent: string; textColor: string }> = {
+  tolerable: { label: "Tolerable", accent: "border-l-green-500", textColor: "text-green-600" },
+  atencion: { label: "Atencion", accent: "border-l-yellow-500", textColor: "text-yellow-600" },
+  critico: { label: "Critico", accent: "border-l-red-500", textColor: "text-red-600" },
+};
 
 interface KpiCardsProps {
-  data: EnvejecimientoRango[];
+  severidad: ResumenSeveridad[];
   totalClientes: number;
 }
 
-export function KpiCards({ data, totalClientes }: KpiCardsProps) {
-  const granTotal = data.reduce((sum, r) => sum + r.total, 0);
-  const totalFacturas = data.reduce((sum, r) => sum + r.cantidad_facturas, 0);
-
-  const items = GRUPOS.map((grupo) => {
-    const rangos = data.filter((d) => grupo.rangos.includes(d.label));
-    const total = rangos.reduce((sum, r) => sum + r.total, 0);
-    const facturas = rangos.reduce((sum, r) => sum + r.cantidad_facturas, 0);
-    const clientes = rangos.reduce((sum, r) => sum + r.cantidad_clientes, 0);
-    return { ...grupo, total, facturas, clientes };
-  });
+export function KpiCards({ severidad, totalClientes }: KpiCardsProps) {
+  const granTotal = severidad.reduce((sum, s) => sum + s.total, 0);
+  const totalFacturas = severidad.reduce((sum, s) => sum + s.cantidad_facturas, 0);
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -56,19 +32,23 @@ export function KpiCards({ data, totalClientes }: KpiCardsProps) {
           </p>
         </CardContent>
       </Card>
-      {items.map((item) => (
-        <Card key={item.label} className={`border-l-4 ${item.accent}`}>
-          <CardContent className="py-3 px-4">
-            <p className={`text-xs font-medium ${item.textColor}`}>{item.label}</p>
-            <p className="text-xl font-semibold text-slate-900 tabular-nums">
-              {formatCurrencyShort(item.total)}
-            </p>
-            <p className="text-xs text-slate-400">
-              {item.facturas} facturas  ·  {item.clientes} clientes
-            </p>
-          </CardContent>
-        </Card>
-      ))}
+      {severidad.map((s) => {
+        const estilo = ESTILOS[s.severidad];
+        if (!estilo) return null;
+        return (
+          <Card key={s.severidad} className={`border-l-4 ${estilo.accent}`}>
+            <CardContent className="py-3 px-4">
+              <p className={`text-xs font-medium ${estilo.textColor}`}>{estilo.label}</p>
+              <p className="text-xl font-semibold text-slate-900 tabular-nums">
+                {formatCurrencyShort(s.total)}
+              </p>
+              <p className="text-xs text-slate-400">
+                {s.cantidad_facturas} facturas  ·  {s.cantidad_clientes} clientes
+              </p>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

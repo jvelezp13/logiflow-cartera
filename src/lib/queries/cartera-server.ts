@@ -74,6 +74,27 @@ export async function getEnvejecimiento(): Promise<EnvejecimientoRango[]> {
   return (data as EnvejecimientoRango[]) || [];
 }
 
+export interface ResumenSeveridad {
+  severidad: "tolerable" | "atencion" | "critico";
+  total: number;
+  cantidad_facturas: number;
+  cantidad_clientes: number;
+}
+
+export async function getResumenSeveridad(): Promise<ResumenSeveridad[]> {
+  const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("get_resumen_severidad", {
+    p_tenant_id: tenantId,
+    p_incluir_castigada: incluirCastigada,
+  });
+
+  if (error) throw error;
+  return (data as ResumenSeveridad[]) || [];
+}
+
 export async function getTotalClientesUnicos(): Promise<number> {
   const tenantId = await getTenantId();
   const incluirCastigada = await getIncluirCastigada();
