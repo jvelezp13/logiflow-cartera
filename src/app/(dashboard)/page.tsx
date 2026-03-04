@@ -7,7 +7,6 @@ import { TopCiudadesTable } from "@/components/dashboard/top-ciudades-table";
 import {
   getEnvejecimiento,
   getResumenSeveridad,
-  getTotalClientesUnicos,
   getTopClientesDeuda,
   getTopCiudadesDeuda,
 } from "@/lib/queries/cartera-server";
@@ -18,10 +17,9 @@ export default async function DashboardPage() {
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
 
-  const [envejecimiento, resumenSeveridad, totalClientes, topClientes, topCiudades] = await Promise.all([
+  const [envejecimiento, resumen, topClientes, topCiudades] = await Promise.all([
     getEnvejecimiento(),
     getResumenSeveridad(),
-    getTotalClientesUnicos(),
     getTopClientesDeuda(),
     getTopCiudadesDeuda(100),
   ]);
@@ -36,7 +34,7 @@ export default async function DashboardPage() {
       />
 
       <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-        <KpiCards severidad={resumenSeveridad} totalClientes={totalClientes} />
+        <KpiCards resumen={resumen} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <EnvejecimientoChart data={envejecimiento} />

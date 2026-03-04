@@ -74,14 +74,21 @@ export async function getEnvejecimiento(): Promise<EnvejecimientoRango[]> {
   return (data as EnvejecimientoRango[]) || [];
 }
 
-export interface ResumenSeveridad {
+export interface GrupoSeveridad {
   severidad: "tolerable" | "atencion" | "critico";
   total: number;
   cantidad_facturas: number;
   cantidad_clientes: number;
 }
 
-export async function getResumenSeveridad(): Promise<ResumenSeveridad[]> {
+export interface ResumenSeveridad {
+  total_clientes: number;
+  total_facturas: number;
+  gran_total: number;
+  grupos: GrupoSeveridad[];
+}
+
+export async function getResumenSeveridad(): Promise<ResumenSeveridad> {
   const tenantId = await getTenantId();
   const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
@@ -92,25 +99,7 @@ export async function getResumenSeveridad(): Promise<ResumenSeveridad[]> {
   });
 
   if (error) throw error;
-  return (data as ResumenSeveridad[]) || [];
-}
-
-export async function getTotalClientesUnicos(): Promise<number> {
-  const tenantId = await getTenantId();
-  const incluirCastigada = await getIncluirCastigada();
-  const supabase = await createClient();
-
-  let query = supabase
-    .from("vista_cliente_resumen")
-    .select("*", { count: "exact", head: true })
-    .eq("tenant_id", tenantId);
-
-  if (!incluirCastigada) {
-    query = query.lte("maxima_mora", 90);
-  }
-
-  const { count } = await query;
-  return count || 0;
+  return (data as ResumenSeveridad) || { total_clientes: 0, total_facturas: 0, gran_total: 0, grupos: [] };
 }
 
 export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecido[]> {

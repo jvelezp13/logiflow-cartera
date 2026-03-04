@@ -11,39 +11,35 @@ const ESTILOS: Record<string, { label: string; accent: string; textColor: string
 };
 
 interface KpiCardsProps {
-  severidad: ResumenSeveridad[];
-  totalClientes: number;
+  resumen: ResumenSeveridad;
 }
 
-export function KpiCards({ severidad, totalClientes }: KpiCardsProps) {
-  const granTotal = severidad.reduce((sum, s) => sum + s.total, 0);
-  const totalFacturas = severidad.reduce((sum, s) => sum + s.cantidad_facturas, 0);
-
+export function KpiCards({ resumen }: KpiCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <Card className="border-l-4 border-l-blue-500">
         <CardContent className="py-3 px-4">
           <p className="text-xs font-medium text-blue-600">Cartera Total</p>
           <p className="text-xl font-semibold text-slate-900 tabular-nums">
-            {formatCurrencyShort(granTotal)}
+            {formatCurrencyShort(resumen.gran_total)}
           </p>
           <p className="text-xs text-slate-400">
-            {totalFacturas} facturas  ·  {totalClientes} clientes
+            {resumen.total_facturas} facturas  ·  {resumen.total_clientes} clientes
           </p>
         </CardContent>
       </Card>
-      {severidad.map((s) => {
-        const estilo = ESTILOS[s.severidad];
+      {resumen.grupos.map((g) => {
+        const estilo = ESTILOS[g.severidad];
         if (!estilo) return null;
         return (
-          <Card key={s.severidad} className={`border-l-4 ${estilo.accent}`}>
+          <Card key={g.severidad} className={`border-l-4 ${estilo.accent}`}>
             <CardContent className="py-3 px-4">
               <p className={`text-xs font-medium ${estilo.textColor}`}>{estilo.label}</p>
               <p className="text-xl font-semibold text-slate-900 tabular-nums">
-                {formatCurrencyShort(s.total)}
+                {formatCurrencyShort(g.total)}
               </p>
               <p className="text-xs text-slate-400">
-                {s.cantidad_facturas} facturas  ·  {s.cantidad_clientes} clientes
+                {g.cantidad_facturas} facturas  ·  {g.cantidad_clientes} clientes
               </p>
             </CardContent>
           </Card>
