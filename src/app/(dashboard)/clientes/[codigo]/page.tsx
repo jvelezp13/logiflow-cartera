@@ -371,7 +371,7 @@ export default async function DetalleClientePage({
                         {pedido.nombre_asesor || "-"}
                       </TableCell>
                       <TableCell className="py-1.5 text-sm font-medium tabular-nums text-right">
-                        {formatCurrencyFull(pedido.total)}
+                        {formatCurrencyFull(pedido.pedido_total || 0)}
                       </TableCell>
                     </TableRow>
                   ))

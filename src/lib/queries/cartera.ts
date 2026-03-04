@@ -69,7 +69,7 @@ export interface PedidoEnriquecido {
   codigo_cliente: string;
   razon_social: string | null;
   ciudad: string | null;
-  total: number;
+  pedido_total: number | null;
   nombre_asesor: string | null;
   deuda_total_cliente: number | null;
   facturas_vencidas_cliente: number | null;
@@ -343,7 +343,7 @@ export async function getAlertasCompletas(tenantId: string = DEFAULT_TENANT_ID):
         codigo_cliente: pedido.codigo_cliente,
         razon_social: pedido.razon_social,
         ciudad: pedido.ciudad,
-        valor: Number(pedido.total),
+        valor: Number(pedido.pedido_total || 0),
         dias_mora: undefined,
       });
     }

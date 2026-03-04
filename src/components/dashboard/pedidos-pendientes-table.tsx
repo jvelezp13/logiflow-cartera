@@ -48,7 +48,7 @@ export function PedidosPendientesTable({ pedidos }: PedidosPendientesTableProps)
                     </TableCell>
                     <TableCell className="text-sm">{pedido.ciudad || "-"}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {formatCurrencyShort(Number(pedido.total))}
+                      {formatCurrencyShort(Number(pedido.pedido_total || 0))}
                     </TableCell>
                     <TableCell className="text-right">
                       {(pedido.facturas_vencidas_cliente || 0) > 0 ? (
