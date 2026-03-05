@@ -50,12 +50,11 @@ export interface NovedadSync {
 // Tipos de novedades de cartera relevantes
 const TIPOS_CARTERA = [
   "cartera_factura_pagada",
-  "cartera_factura_vencida",
-  "cartera_mora_critica",
   "cupo_cambio",
   "credito_activado",
   "cartera_deuda_creciente",
   "cartera_cliente_nuevo",
+  "plazo_cambio",
 ];
 
 // --- Queries ---

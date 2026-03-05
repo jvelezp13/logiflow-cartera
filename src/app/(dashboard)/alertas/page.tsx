@@ -139,10 +139,9 @@ function formatFechaDia(fecha: string | null): string {
 function getTipoBadge(tipo: string) {
   const config: Record<string, { label: string; classes: string }> = {
     cartera_factura_pagada: { label: "Pago", classes: "bg-green-100 text-green-700" },
-    cartera_factura_vencida: { label: "Vencida", classes: "bg-red-100 text-red-700" },
-    cartera_mora_critica: { label: "Mora critica", classes: "bg-red-100 text-red-700" },
     cupo_cambio: { label: "Cupo", classes: "bg-blue-100 text-blue-700" },
     credito_activado: { label: "Credito", classes: "bg-blue-100 text-blue-700" },
+    plazo_cambio: { label: "Plazo", classes: "bg-amber-100 text-amber-700" },
     cartera_deuda_creciente: { label: "Deuda", classes: "bg-slate-100 text-slate-700" },
     cartera_cliente_nuevo: { label: "Nuevo", classes: "bg-slate-100 text-slate-700" },
   };
