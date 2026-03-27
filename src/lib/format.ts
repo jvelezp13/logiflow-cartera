@@ -1,9 +1,3 @@
-/**
- * Utilidades de formato de moneda centralizadas.
- * Reemplaza las 5 copias locales de formatCurrency en las paginas.
- */
-
-// Formato corto para dashboards y graficos (K/M)
 export function formatCurrencyShort(value: number): string {
   if (value >= 1_000_000) {
     return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -14,7 +8,6 @@ export function formatCurrencyShort(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
-// Formato completo para tablas y detalles (ej: $1.234.567)
 export function formatCurrencyFull(value: number): string {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -22,4 +15,10 @@ export function formatCurrencyFull(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+export function formatFechaCorta(fecha: string | null): string {
+  if (!fecha) return "-";
+  const d = new Date(fecha + "T00:00:00");
+  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }

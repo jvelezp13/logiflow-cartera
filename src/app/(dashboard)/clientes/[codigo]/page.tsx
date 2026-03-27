@@ -17,64 +17,7 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
-
-// Severidad del cliente basada en maxima mora (misma logica que dashboard y pagina clientes)
-function getSeveridad(maxMora: number): {
-  label: string;
-  color: string;
-  border: string;
-  bg: string;
-} {
-  if (maxMora <= 5)
-    return {
-      label: "Tolerable",
-      color: "text-green-600",
-      border: "border-l-green-500",
-      bg: "bg-green-50",
-    };
-  if (maxMora <= 20)
-    return {
-      label: "Atencion",
-      color: "text-yellow-600",
-      border: "border-l-yellow-500",
-      bg: "bg-yellow-50",
-    };
-  return {
-    label: "Critico",
-    color: "text-red-600",
-    border: "border-l-red-500",
-    bg: "bg-red-50",
-  };
-}
-
-// Badge de mora por factura (misma escala de severidad del sistema)
-function getMoraBadge(mora: number | null, rangoMora?: string | null) {
-  const label = rangoMora || (mora && mora > 0 ? `${mora}d` : "Al dia");
-
-  if (!mora || mora <= 0)
-    return (
-      <Badge variant="outline" className="bg-green-50 text-green-700 text-xs">
-        Al dia
-      </Badge>
-    );
-  if (mora <= 5)
-    return (
-      <Badge variant="outline" className="bg-green-50 text-green-700 text-xs">
-        {mora}d
-      </Badge>
-    );
-  if (mora <= 20)
-    return (
-      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 text-xs">
-        {mora}d
-      </Badge>
-    );
-  return (
-    <Badge variant="outline" className="bg-red-50 text-red-700 text-xs">
-      {mora}d
-    </Badge>
-  );
-}
+import { getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG } from "@/lib/severity";
 
 export default async function DetalleClientePage({
   params,
@@ -97,9 +40,9 @@ export default async function DetalleClientePage({
     : todasFacturas.filter((f) => (f.mora || 0) <= 90);
 
   const nombreDisplay = info.nombre_negocio || info.razon_social || codigo;
-  const severidad = getSeveridad(info.maxima_mora);
+  const severidad = SEVERIDAD_CONFIG[getSeveridad(info.maxima_mora)];
 
-  // Calculo de cupo utilizado
+
   const cupo = info.cupo_asignado || 0;
   const porcentajeCupo = cupo > 0 ? (info.total_deuda / cupo) * 100 : null;
 
@@ -186,7 +129,7 @@ export default async function DetalleClientePage({
                 <CardTitle className="text-base">Resumen Financiero</CardTitle>
                 <Badge
                   variant="outline"
-                  className={`${severidad.bg} ${severidad.color} text-xs`}
+                  className={`${severidad.bg} ${severidad.text} text-xs`}
                 >
                   {severidad.label}
                 </Badge>
@@ -298,7 +241,9 @@ export default async function DetalleClientePage({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  facturas.map((factura) => (
+                  facturas.map((factura) => {
+                    const moraBadge = getMoraBadgeStyles(factura.mora ?? 0);
+                    return (
                     <TableRow key={factura.no_factura}>
                       <TableCell className="py-1.5 text-sm font-medium">
                         {factura.no_factura}
@@ -320,13 +265,16 @@ export default async function DetalleClientePage({
                           : "-"}
                       </TableCell>
                       <TableCell className="py-1.5">
-                        {getMoraBadge(factura.mora, factura.rango_mora)}
+                        <Badge variant="outline" className={`${moraBadge.classes} text-xs`}>
+                          {factura.rango_mora || moraBadge.label}
+                        </Badge>
                       </TableCell>
                       <TableCell className="py-1.5 text-sm font-medium tabular-nums text-right">
                         {formatCurrencyFull(factura.total)}
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

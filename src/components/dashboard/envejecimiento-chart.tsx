@@ -9,21 +9,8 @@ import {
 } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
 import { formatCurrencyShort } from "@/lib/format";
+import { RANGE_COLORS } from "@/lib/constants";
 import type { EnvejecimientoRango } from "@/lib/queries/cartera-server";
-
-// Colores semanticos: verde (al dia) -> rojo (critico)
-// Escala semantica: verde (tolerable) -> amarillo -> naranja -> rojo (critico)
-const RANGE_COLORS: Record<string, string> = {
-  "Al dia": "#22c55e",
-  "1-5 dias": "#4ade80",
-  "6-10 dias": "#facc15",
-  "11-15 dias": "#eab308",
-  "16-20 dias": "#f59e0b",
-  "21-30 dias": "#f97316",
-  "31-60 dias": "#ef4444",
-  "61-90 dias": "#dc2626",
-  "90+ dias": "#991b1b",
-};
 
 const chartConfig = {
   total: { label: "Total" },

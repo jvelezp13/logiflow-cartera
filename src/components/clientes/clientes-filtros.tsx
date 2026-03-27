@@ -11,26 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search } from "lucide-react";
-
-// Chips de severidad con colores semanticos
-const SEVERIDADES = [
-  { value: "tolerable", label: "Tolerable", bg: "bg-green-50 border-green-200 text-green-700", activeBg: "bg-green-600 text-white border-green-600" },
-  { value: "atencion", label: "Atencion", bg: "bg-yellow-50 border-yellow-200 text-yellow-700", activeBg: "bg-yellow-500 text-white border-yellow-500" },
-  { value: "critico", label: "Critico", bg: "bg-red-50 border-red-200 text-red-700", activeBg: "bg-red-600 text-white border-red-600" },
-] as const;
-
-// Rangos de envejecimiento (mismos que el dashboard)
-const RANGOS = [
-  { value: "al_dia", label: "Al dia" },
-  { value: "1-5", label: "1-5 dias" },
-  { value: "6-10", label: "6-10 dias" },
-  { value: "11-15", label: "11-15 dias" },
-  { value: "16-20", label: "16-20 dias" },
-  { value: "21-30", label: "21-30 dias" },
-  { value: "31-60", label: "31-60 dias" },
-  { value: "61-90", label: "61-90 dias" },
-  { value: "90+", label: "90+ dias" },
-] as const;
+import { SEVERIDADES, RANGOS } from "@/lib/severity";
 
 interface ClientesFiltrosProps {
   ciudades: string[];

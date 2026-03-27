@@ -9,30 +9,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrencyFull } from "@/lib/format";
+import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import { getFacturasConFiltros, getCiudades } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
+import { getMoraBadgeStyles } from "@/lib/severity";
 import { FacturasFiltros } from "@/components/facturas/facturas-filtros";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
 
-// Badge de mora con colores semanticos
-function getMoraBadge(mora: number): { label: string; classes: string } {
-  if (mora <= 0) return { label: "Al dia", classes: "bg-slate-100 text-slate-600" };
-  if (mora <= 5) return { label: `${mora}d`, classes: "bg-green-100 text-green-700" };
-  if (mora <= 20) return { label: `${mora}d`, classes: "bg-yellow-100 text-yellow-700" };
-  return { label: `${mora}d`, classes: "bg-red-100 text-red-700" };
-}
-
-// Formato fecha corta (dd/mm/aa)
-function formatFecha(fecha: string | null): string {
-  if (!fecha) return "-";
-  const d = new Date(fecha + "T00:00:00");
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
 
 export default async function FacturasPage({
   searchParams,
@@ -113,7 +100,7 @@ export default async function FacturasPage({
                   </TableRow>
                 ) : (
                   facturas.map((factura) => {
-                    const badge = getMoraBadge(factura.mora);
+                    const badge = getMoraBadgeStyles(factura.mora);
                     return (
                       <TableRow key={factura.no_factura} className="hover:bg-slate-50">
                         <TableCell className="py-1.5 text-sm font-medium">
@@ -132,7 +119,7 @@ export default async function FacturasPage({
                           {factura.vendedor || "-"}
                         </TableCell>
                         <TableCell className="text-sm tabular-nums py-1.5">
-                          {formatFecha(factura.fecha_vencimiento)}
+                          {formatFechaCorta(factura.fecha_vencimiento)}
                         </TableCell>
                         <TableCell className="text-center py-1.5">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.classes}`}>

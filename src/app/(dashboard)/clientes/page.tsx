@@ -13,18 +13,12 @@ import { formatCurrencyFull } from "@/lib/format";
 import { getClientesConSaldo, getCiudades } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
+import { getSeveridad, SEVERIDAD_CONFIG } from "@/lib/severity";
 import { ClientesFiltros } from "@/components/clientes/clientes-filtros";
 import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
-
-// Clasificacion por maxima_mora (mismos rangos que dashboard)
-function getSeveridad(maxMora: number): { label: string; color: string } {
-  if (maxMora <= 5) return { label: "Tolerable", color: "text-green-600" };
-  if (maxMora <= 20) return { label: "Atencion", color: "text-yellow-600" };
-  return { label: "Critico", color: "text-red-600" };
-}
 
 export default async function ClientesPage({
   searchParams,
@@ -108,6 +102,7 @@ export default async function ClientesPage({
                 ) : (
                   clientes.map((cliente) => {
                     const sev = getSeveridad(cliente.maxima_mora);
+                    const sevConfig = SEVERIDAD_CONFIG[sev];
                     return (
                       <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-50">
                         <TableCell className="py-1.5">
@@ -136,8 +131,8 @@ export default async function ClientesPage({
                             <span className="text-slate-400">-</span>
                           )}
                         </TableCell>
-                        <TableCell className={`text-right text-xs font-medium py-1.5 ${sev.color}`}>
-                          {sev.label}
+                        <TableCell className={`text-right text-xs font-medium py-1.5 ${sevConfig.text}`}>
+                          {sevConfig.label}
                         </TableCell>
                         <TableCell className="text-right text-xs text-slate-500 py-1.5">
                           {cliente.num_facturas}

@@ -6,15 +6,88 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 
-// Re-exportar interfaces para uso en componentes
-export type {
-  DashboardKPIs,
-  ClienteEnriquecido,
-  FacturaEnriquecida,
-  PedidoEnriquecido,
-  EnvejecimientoRango,
-  CiudadResumen,
-} from "./cartera";
+// --- Tipos ---
+
+export interface DashboardKPIs {
+  cartera_total: number;
+  cartera_vencida: number;
+  cartera_por_vencer: number;
+  clientes_con_deuda: number;
+  facturas_vencidas: number;
+  facturas_por_vencer: number;
+}
+
+export interface ClienteEnriquecido {
+  codigo_cliente: string;
+  razon_social: string | null;
+  nombre_negocio: string | null;
+  nombre_completo: string | null;
+  documento: string | null;
+  ciudad: string | null;
+  departamento: string | null;
+  barrio: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  correo: string | null;
+  segmento: string | null;
+  tipologia: string | null;
+  canal: string | null;
+  subcanal: string | null;
+  estado: string | null;
+  total_deuda: number;
+  total_vencido: number;
+  total_por_vencer: number;
+  num_facturas: number;
+  maxima_mora: number;
+  pedidos_pendientes: number;
+  estado_credito: string | null;
+  cupo_asignado: number | null;
+  ultimo_pedido_fecha: string | null;
+}
+
+export interface FacturaEnriquecida {
+  codigo_cliente: string;
+  razon_social: string | null;
+  nombre_negocio: string | null;
+  ciudad: string | null;
+  segmento: string | null;
+  no_factura: string;
+  fecha_factura: string | null;
+  fecha_vencimiento: string | null;
+  mora: number;
+  total: number;
+  vendedor: string | null;
+  estado_factura: string;
+  rango_mora: string;
+}
+
+export interface PedidoEnriquecido {
+  num_pedido: string;
+  estado: string;
+  fecha: string;
+  codigo_cliente: string;
+  razon_social: string | null;
+  ciudad: string | null;
+  pedido_total: number | null;
+  nombre_asesor: string | null;
+  deuda_total_cliente: number | null;
+  facturas_vencidas_cliente: number | null;
+}
+
+export interface EnvejecimientoRango {
+  label: string;
+  total: number;
+  cantidad_facturas: number;
+  cantidad_clientes: number;
+  porcentaje: number;
+}
+
+export interface CiudadResumen {
+  ciudad: string;
+  num_clientes: number;
+  total_deuda: number;
+  total_vencido: number;
+}
 
 // --- Tipos Pre-facturacion ---
 
@@ -28,19 +101,10 @@ export interface PedidoPreFacturacion {
   maxima_mora: number;
   total_vencido: number;
   severidad: "atencion" | "critico";
-  // Campos de cupo (modo cupo)
   cupo_asignado: number | null;
   total_deuda: number;
   cupo_disponible: number | null;
 }
-
-import type {
-  DashboardKPIs,
-  ClienteEnriquecido,
-  EnvejecimientoRango,
-  PedidoEnriquecido,
-  CiudadResumen,
-} from "./cartera";
 
 // Sanitizar input para evitar inyeccion en filtros PostgREST
 function sanitizeSearchInput(input: string): string {
@@ -200,7 +264,7 @@ export async function getFacturasConFiltros(options?: {
   rango?: string;
   limit?: number;
   offset?: number;
-}): Promise<{ facturas: import("./cartera").FacturaEnriquecida[]; total: number }> {
+}): Promise<{ facturas: FacturaEnriquecida[]; total: number }> {
   const tenantId = await getTenantId();
   const incluirCastigada = await getIncluirCastigada();
   const supabase = await createClient();
@@ -259,7 +323,7 @@ export async function getFacturasConFiltros(options?: {
 
   if (error) throw error;
   return {
-    facturas: (data as import("./cartera").FacturaEnriquecida[]) || [],
+    facturas: (data as FacturaEnriquecida[]) || [],
     total: count || 0,
   };
 }
@@ -334,7 +398,7 @@ export async function getClientesConSaldo(options?: {
 
 export async function getDetalleCliente(codigoCliente: string): Promise<{
   info: ClienteEnriquecido | null;
-  facturas: import("./cartera").FacturaEnriquecida[];
+  facturas: FacturaEnriquecida[];
   pedidos: PedidoEnriquecido[];
 }> {
   const tenantId = await getTenantId();
@@ -367,7 +431,7 @@ export async function getDetalleCliente(codigoCliente: string): Promise<{
 
   return {
     info: (infoResult.data as ClienteEnriquecido) || null,
-    facturas: (facturasResult.data as import("./cartera").FacturaEnriquecida[]) || [],
+    facturas: (facturasResult.data as FacturaEnriquecida[]) || [],
     pedidos: (pedidosResult.data as PedidoEnriquecido[]) || [],
   };
 }

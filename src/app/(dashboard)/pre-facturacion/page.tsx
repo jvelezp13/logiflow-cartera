@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrencyFull } from "@/lib/format";
+import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import {
   getPedidosPreFacturacion,
   getClientesCupoExcedido,
@@ -20,28 +20,9 @@ import type {
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { PreFacturacionFiltros } from "@/components/pre-facturacion/pre-facturacion-filtros";
+import { getMoraBadgeStyles, SEVERIDAD_CONFIG } from "@/lib/severity";
 import Link from "next/link";
 
-// Badge de severidad del cliente
-function getSeveridadBadge(severidad: "atencion" | "critico") {
-  if (severidad === "critico") {
-    return { label: "Critico", classes: "bg-red-100 text-red-700" };
-  }
-  return { label: "Atencion", classes: "bg-yellow-100 text-yellow-700" };
-}
-
-// Badge de mora
-function getMoraBadge(mora: number): { label: string; classes: string } {
-  if (mora <= 20) return { label: `${mora}d`, classes: "bg-yellow-100 text-yellow-700" };
-  return { label: `${mora}d`, classes: "bg-red-100 text-red-700" };
-}
-
-// Formato fecha corta (dd/mm/aa)
-function formatFecha(fecha: string | null): string {
-  if (!fecha) return "-";
-  const d = new Date(fecha + "T00:00:00");
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
 
 // Color de la barra segun porcentaje de uso
 function getBarColor(pct: number): string {
@@ -120,13 +101,14 @@ function TablaMora({ pedidos }: { pedidos: PedidoPreFacturacion[] }) {
           </TableRow>
         ) : (
           pedidos.map((pedido) => {
-            const severidadBadge = getSeveridadBadge(pedido.severidad);
-            const moraBadge = getMoraBadge(pedido.maxima_mora);
+            const sevCfg = SEVERIDAD_CONFIG[pedido.severidad];
+            const severidadBadge = { label: sevCfg.label, classes: sevCfg.badge };
+            const moraBadge = getMoraBadgeStyles(pedido.maxima_mora);
             return (
               <TableRow key={pedido.num_pedido} className="hover:bg-slate-50">
                 <TableCell className="py-1.5">
                   <div className="text-sm font-medium">{pedido.num_pedido}</div>
-                  <div className="text-xs text-slate-400">{formatFecha(pedido.fecha)}</div>
+                  <div className="text-xs text-slate-400">{formatFechaCorta(pedido.fecha)}</div>
                 </TableCell>
                 <TableCell className="py-1.5">
                   <Link

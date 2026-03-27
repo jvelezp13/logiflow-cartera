@@ -9,35 +9,12 @@ import {
 } from "@/components/ui/chart";
 import { Pie, PieChart, Cell, Label } from "recharts";
 import { formatCurrencyShort } from "@/lib/format";
+import { SEVERITY_GRUPOS } from "@/lib/constants";
 import type { EnvejecimientoRango } from "@/lib/queries/cartera-server";
 
-// Agrupacion por severidad
-const GRUPOS: { key: string; label: string; color: string; rangos: string[] }[] = [
-  {
-    key: "tolerable",
-    label: "Tolerable",
-    color: "#22c55e",
-    rangos: ["Al dia", "1-5 dias"],
-  },
-  {
-    key: "atencion",
-    label: "Atencion",
-    color: "#eab308",
-    rangos: ["6-10 dias", "11-15 dias", "16-20 dias"],
-  },
-  {
-    key: "critico",
-    label: "Critico",
-    color: "#ef4444",
-    rangos: ["21-30 dias", "31-60 dias", "61-90 dias", "90+ dias"],
-  },
-];
-
-const chartConfig = {
-  tolerable: { label: "Tolerable", color: "#22c55e" },
-  atencion: { label: "Atencion", color: "#eab308" },
-  critico: { label: "Critico", color: "#ef4444" },
-} satisfies ChartConfig;
+const chartConfig = Object.fromEntries(
+  SEVERITY_GRUPOS.map((g) => [g.key, { label: g.label, color: g.color }])
+) satisfies ChartConfig;
 
 interface DistribucionPieProps {
   data: EnvejecimientoRango[];
@@ -45,7 +22,7 @@ interface DistribucionPieProps {
 
 export function DistribucionPie({ data }: DistribucionPieProps) {
   // Agrupar rangos en 3 segmentos
-  const segmentos = GRUPOS.map((grupo) => {
+  const segmentos = SEVERITY_GRUPOS.map((grupo) => {
     const rangosDelGrupo = data.filter((d) => grupo.rangos.includes(d.label));
     const total = rangosDelGrupo.reduce((sum, r) => sum + r.total, 0);
     const facturas = rangosDelGrupo.reduce((sum, r) => sum + r.cantidad_facturas, 0);

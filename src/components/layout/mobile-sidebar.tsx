@@ -1,18 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  AlertTriangle,
-  Bell,
-  Settings,
-  TrendingDown,
-  UserCog,
-  Building2,
-} from "lucide-react";
+import { Settings, TrendingDown } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -20,23 +11,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { getNavItems } from "@/lib/navigation";
 import type { AppRole } from "@/lib/auth/types";
-
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Clientes", href: "/clientes", icon: Users },
-  { name: "Facturas", href: "/facturas", icon: FileText },
-  { name: "Pre-facturacion", href: "/pre-facturacion", icon: AlertTriangle },
-  { name: "Alertas", href: "/alertas", icon: Bell },
-];
-
-const adminNavigation = [
-  { name: "Usuarios", href: "/usuarios", icon: UserCog },
-];
-
-const superAdminNavigation = [
-  { name: "Tenants", href: "/tenants", icon: Building2 },
-];
 
 interface MobileSidebarProps {
   open: boolean;
@@ -46,12 +22,7 @@ interface MobileSidebarProps {
 
 export function MobileSidebar({ open, onOpenChange, userRole }: MobileSidebarProps) {
   const pathname = usePathname();
-
-  const allNavItems = [
-    ...navigation,
-    ...((userRole === "admin" || userRole === "super_admin") ? adminNavigation : []),
-    ...(userRole === "super_admin" ? superAdminNavigation : []),
-  ];
+  const allNavItems = useMemo(() => getNavItems(userRole), [userRole]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

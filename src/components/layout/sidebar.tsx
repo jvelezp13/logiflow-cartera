@@ -1,38 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  AlertTriangle,
-  Bell,
-  Settings,
-  TrendingDown,
-  UserCog,
-  Building2,
-} from "lucide-react";
+import { Settings, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getNavItems } from "@/lib/navigation";
 import type { AppRole } from "@/lib/auth/types";
-
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Clientes", href: "/clientes", icon: Users },
-  { name: "Facturas", href: "/facturas", icon: FileText },
-  { name: "Pre-facturacion", href: "/pre-facturacion", icon: AlertTriangle },
-  { name: "Alertas", href: "/alertas", icon: Bell },
-];
-
-// Items visibles solo para admin y super_admin
-const adminNavigation = [
-  { name: "Usuarios", href: "/usuarios", icon: UserCog },
-];
-
-// Items visibles solo para super_admin
-const superAdminNavigation = [
-  { name: "Tenants", href: "/tenants", icon: Building2 },
-];
 
 interface SidebarProps {
   userRole?: AppRole | null;
@@ -40,12 +14,7 @@ interface SidebarProps {
 
 export function Sidebar({ userRole }: SidebarProps) {
   const pathname = usePathname();
-
-  const allNavItems = [
-    ...navigation,
-    ...((userRole === "admin" || userRole === "super_admin") ? adminNavigation : []),
-    ...(userRole === "super_admin" ? superAdminNavigation : []),
-  ];
+  const allNavItems = useMemo(() => getNavItems(userRole), [userRole]);
 
   return (
     <div className="hidden md:flex flex-col h-full bg-slate-900 text-white w-64">
