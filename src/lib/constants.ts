@@ -30,10 +30,3 @@ export const SEVERITY_GRUPOS: readonly { key: string; label: string; color: stri
     rangos: ["21-30 dias", "31-60 dias", "61-90 dias", "90+ dias"],
   },
 ];
-
-export const SEVERITY_COLORS = {
-  critica: "#dc2626",
-  alta: "#f97316",
-  media: "#eab308",
-  baja: "#22c55e",
-} as const;

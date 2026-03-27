@@ -13,23 +13,24 @@ import {
 import { Search } from "lucide-react";
 import { SEVERIDADES, RANGOS } from "@/lib/severity";
 
-interface ClientesFiltrosProps {
+interface FiltrosCarteraProps {
+  rutaBase: string;
+  placeholder: string;
+  etiquetaConteo: string;
   ciudades: string[];
   total: number;
 }
 
-export function ClientesFiltros({ ciudades, total }: ClientesFiltrosProps) {
+export function FiltrosCartera({ rutaBase, placeholder, etiquetaConteo, ciudades, total }: FiltrosCarteraProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // Leer valores actuales de la URL
   const q = searchParams.get("q") || "";
   const ciudad = searchParams.get("ciudad") || "all";
   const severidad = searchParams.get("severidad") || "";
   const rango = searchParams.get("rango") || "all";
 
-  // Construir URL con los filtros actualizados
   const pushFilters = useCallback(
     (updates: Record<string, string>) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -40,14 +41,12 @@ export function ClientesFiltros({ ciudades, total }: ClientesFiltrosProps) {
           params.delete(key);
         }
       }
-      // Resetear pagina al cambiar filtros
       params.set("page", "1");
-      router.push(`/clientes?${params.toString()}`, { scroll: false });
+      router.push(`${rutaBase}?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams]
+    [router, searchParams, rutaBase]
   );
 
-  // Busqueda con debounce de 300ms
   const handleSearch = useCallback(
     (value: string) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -58,7 +57,6 @@ export function ClientesFiltros({ ciudades, total }: ClientesFiltrosProps) {
     [pushFilters]
   );
 
-  // Toggle de severidad: click otra vez = deseleccionar
   const toggleSeveridad = useCallback(
     (value: string) => {
       pushFilters({ severidad: severidad === value ? "" : value });
@@ -68,12 +66,11 @@ export function ClientesFiltros({ ciudades, total }: ClientesFiltrosProps) {
 
   return (
     <div className="space-y-3">
-      {/* Fila 1: Busqueda + Ciudad + Rango envejecimiento + Conteo */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Buscar cliente..."
+            placeholder={placeholder}
             defaultValue={q}
             onChange={(e) => handleSearch(e.target.value)}
             className="pl-9 h-9 text-sm"
@@ -111,11 +108,10 @@ export function ClientesFiltros({ ciudades, total }: ClientesFiltrosProps) {
         </Select>
 
         <span className="text-xs text-slate-500 whitespace-nowrap tabular-nums">
-          {total} clientes
+          {total} {etiquetaConteo}
         </span>
       </div>
 
-      {/* Fila 2: Chips de severidad */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-400 mr-1">Estado:</span>
         {SEVERIDADES.map((s) => (

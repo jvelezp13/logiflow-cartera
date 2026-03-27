@@ -14,12 +14,12 @@ import { getFacturasConFiltros, getCiudades } from "@/lib/queries/cartera-server
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { getMoraBadgeStyles } from "@/lib/severity";
-import { FacturasFiltros } from "@/components/facturas/facturas-filtros";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { buildPageUrl } from "@/lib/url";
+import { FiltrosCartera } from "@/components/filtros-cartera";
+import { Paginacion } from "@/components/paginacion";
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
-
 
 export default async function FacturasPage({
   searchParams,
@@ -33,7 +33,6 @@ export default async function FacturasPage({
   const rango = params.rango || undefined;
   const page = Math.max(1, Number(params.page) || 1);
 
-  // Todo en paralelo, server-side
   const [profile, incluirCastigada, ciudades, { facturas, total }] =
     await Promise.all([
       getUserProfile(),
@@ -51,17 +50,6 @@ export default async function FacturasPage({
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
-  // Construir query string para links de paginacion
-  function buildPageUrl(targetPage: number): string {
-    const p = new URLSearchParams();
-    if (busqueda) p.set("q", busqueda);
-    if (ciudad) p.set("ciudad", ciudad);
-    if (severidad) p.set("severidad", severidad);
-    if (rango) p.set("rango", rango);
-    p.set("page", String(targetPage));
-    return `/facturas?${p.toString()}`;
-  }
-
   return (
     <>
       <Header
@@ -72,12 +60,16 @@ export default async function FacturasPage({
       />
 
       <div className="p-6 space-y-4 bg-slate-50 min-h-screen">
-        {/* Filtros inline */}
         <Suspense>
-          <FacturasFiltros ciudades={ciudades} total={total} />
+          <FiltrosCartera
+            rutaBase="/facturas"
+            placeholder="Buscar factura o cliente..."
+            etiquetaConteo="facturas"
+            ciudades={ciudades}
+            total={total}
+          />
         </Suspense>
 
-        {/* Tabla */}
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -138,46 +130,13 @@ export default async function FacturasPage({
           </CardContent>
         </Card>
 
-        {/* Paginacion con Links */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-500">
-              Mostrando {(page - 1) * ITEMS_PER_PAGE + 1} -{" "}
-              {Math.min(page * ITEMS_PER_PAGE, total)} de {total}
-            </div>
-            <div className="flex items-center gap-2">
-              {page > 1 ? (
-                <Link
-                  href={buildPageUrl(page - 1)}
-                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
-                  aria-label="Pagina anterior"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Link>
-              ) : (
-                <span className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm opacity-50 cursor-not-allowed">
-                  <ChevronLeft className="h-4 w-4" />
-                </span>
-              )}
-              <span className="text-sm">
-                Pagina {page} de {totalPages}
-              </span>
-              {page < totalPages ? (
-                <Link
-                  href={buildPageUrl(page + 1)}
-                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
-                  aria-label="Pagina siguiente"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              ) : (
-                <span className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm opacity-50 cursor-not-allowed">
-                  <ChevronRight className="h-4 w-4" />
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+        <Paginacion
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          itemsPorPagina={ITEMS_PER_PAGE}
+          buildUrl={(p) => buildPageUrl("/facturas", p, { busqueda, ciudad, severidad, rango })}
+        />
       </div>
     </>
   );

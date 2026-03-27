@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RANGE_COLORS, SEVERITY_GRUPOS, SEVERITY_COLORS } from "../constants";
+import { RANGE_COLORS, SEVERITY_GRUPOS } from "../constants";
 
 describe("RANGE_COLORS", () => {
   it("tiene 9 colores para los rangos de envejecimiento", () => {
@@ -26,14 +26,5 @@ describe("SEVERITY_GRUPOS", () => {
       expect(grupo).toHaveProperty("rangos");
       expect(grupo.rangos.length).toBeGreaterThan(0);
     });
-  });
-});
-
-describe("SEVERITY_COLORS", () => {
-  it("tiene los 4 niveles de alerta de cupo", () => {
-    expect(SEVERITY_COLORS).toHaveProperty("critica");
-    expect(SEVERITY_COLORS).toHaveProperty("alta");
-    expect(SEVERITY_COLORS).toHaveProperty("media");
-    expect(SEVERITY_COLORS).toHaveProperty("baja");
   });
 });

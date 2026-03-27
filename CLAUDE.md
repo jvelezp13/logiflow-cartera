@@ -42,10 +42,10 @@ src/
 ├── components/
 │   ├── layout/                 # Header, Sidebar, MobileSidebar, DashboardShell
 │   ├── dashboard/              # KPI cards, charts, tablas top
-│   ├── clientes/               # Filtros clientes
-│   ├── facturas/               # Filtros facturas
-│   ├── alertas/                # Filtros alertas
-│   ├── pre-facturacion/        # Filtros pre-facturacion
+│   ├── alertas/                # Filtros alertas (mode-switching)
+│   ├── pre-facturacion/        # Filtros pre-facturacion (mode-switching)
+│   ├── filtros-cartera.tsx     # Filtros compartidos clientes/facturas (busqueda+ciudad+rango+severidad)
+│   ├── paginacion.tsx          # Paginacion reutilizable con Links
 │   ├── toggle-castigada.tsx    # Toggle cartera castigada (cookie)
 │   └── ui/                     # shadcn/ui (NO editar manualmente)
 └── lib/
@@ -57,7 +57,8 @@ src/
     ├── severity.ts             # getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG, SEVERIDADES, RANGOS
     ├── navigation.ts           # getNavItems, navigation arrays (sidebar + mobile)
     ├── format.ts               # formatCurrencyShort, formatCurrencyFull
-    ├── constants.ts            # RANGE_COLORS, SEVERITY_GRUPOS, SEVERITY_COLORS
+    ├── url.ts                  # buildPageUrl (paginacion con filtros)
+    ├── constants.ts            # RANGE_COLORS, SEVERITY_GRUPOS
     ├── castigada.ts            # getIncluirCastigada (lee cookie)
     ├── castigada-action.ts     # toggleCastigadaCookie (server action, escribe cookie)
     └── logger.ts               # logError (solo en dev)
@@ -121,8 +122,11 @@ src/
 - Severidad centralizada en `lib/severity.ts` (antes duplicada en 5+ archivos)
 - Navegacion centralizada en `lib/navigation.ts` (antes duplicada en sidebar y mobile-sidebar)
 - Colores de charts centralizados en `lib/constants.ts` (RANGE_COLORS, SEVERITY_GRUPOS)
-- Filtros usan SEVERIDADES y RANGOS de `lib/severity.ts` (antes duplicados)
+- Filtros consolidados en `components/filtros-cartera.tsx` (antes duplicados en clientes/ y facturas/)
+- Paginacion extraida a `components/paginacion.tsx` (antes duplicada en ambas paginas)
+- buildPageUrl centralizado en `lib/url.ts`
 - Eliminado `cartera.ts` legacy (tipos movidos a `cartera-server.ts`)
+- Eliminado `SEVERITY_COLORS` (codigo muerto sin consumidores)
 
 ## Comandos
 
