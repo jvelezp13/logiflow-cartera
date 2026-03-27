@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, TrendingDown } from "lucide-react";
+import { TrendingDown } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -11,18 +10,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { getNavItems } from "@/lib/navigation";
-import type { AppRole } from "@/lib/auth/types";
+import { navigation } from "@/lib/navigation";
 
 interface MobileSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  userRole?: AppRole | null;
 }
 
-export function MobileSidebar({ open, onOpenChange, userRole }: MobileSidebarProps) {
+export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
   const pathname = usePathname();
-  const allNavItems = useMemo(() => getNavItems(userRole), [userRole]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -35,7 +31,7 @@ export function MobileSidebar({ open, onOpenChange, userRole }: MobileSidebarPro
         </SheetHeader>
 
         <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Navegacion principal">
-          {allNavItems.map((item) => {
+          {navigation.map((item) => {
             const isActive =
               pathname === item.href ||
               (item.href !== "/" && pathname.startsWith(item.href));
@@ -59,23 +55,6 @@ export function MobileSidebar({ open, onOpenChange, userRole }: MobileSidebarPro
             );
           })}
         </nav>
-
-        <div className="px-3 py-4 border-t border-slate-800">
-          <Link
-            href="/configuracion"
-            onClick={() => onOpenChange(false)}
-            aria-current={pathname === "/configuracion" ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-              pathname === "/configuracion"
-                ? "bg-blue-600 text-white"
-                : "text-slate-300 hover:bg-slate-800 hover:text-white",
-            )}
-          >
-            <Settings className="h-5 w-5" />
-            Configuracion
-          </Link>
-        </div>
       </SheetContent>
     </Sheet>
   );

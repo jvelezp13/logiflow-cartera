@@ -1,20 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, TrendingDown } from "lucide-react";
+import { TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getNavItems } from "@/lib/navigation";
-import type { AppRole } from "@/lib/auth/types";
+import { navigation } from "@/lib/navigation";
 
-interface SidebarProps {
-  userRole?: AppRole | null;
-}
-
-export function Sidebar({ userRole }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
-  const allNavItems = useMemo(() => getNavItems(userRole), [userRole]);
 
   return (
     <div className="hidden md:flex flex-col h-full bg-slate-900 text-white w-64">
@@ -24,7 +17,7 @@ export function Sidebar({ userRole }: SidebarProps) {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Navegacion principal">
-        {allNavItems.map((item) => {
+        {navigation.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -47,22 +40,6 @@ export function Sidebar({ userRole }: SidebarProps) {
           );
         })}
       </nav>
-
-      <div className="px-3 py-4 border-t border-slate-800">
-        <Link
-          href="/configuracion"
-          aria-current={pathname === "/configuracion" ? "page" : undefined}
-          className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-            pathname === "/configuracion"
-              ? "bg-blue-600 text-white"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white",
-          )}
-        >
-          <Settings className="h-5 w-5" />
-          Configuracion
-        </Link>
-      </div>
     </div>
   );
 }

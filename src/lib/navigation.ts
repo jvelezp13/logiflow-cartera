@@ -4,11 +4,8 @@ import {
   FileText,
   AlertTriangle,
   Bell,
-  UserCog,
-  Building2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { AppRole } from "@/lib/auth/types";
 
 export interface NavItem {
   name: string;
@@ -24,18 +21,6 @@ export const navigation: NavItem[] = [
   { name: "Alertas", href: "/alertas", icon: Bell },
 ];
 
-export const adminNavigation: NavItem[] = [
-  { name: "Usuarios", href: "/usuarios", icon: UserCog },
-];
-
-export const superAdminNavigation: NavItem[] = [
-  { name: "Tenants", href: "/tenants", icon: Building2 },
-];
-
-export function getNavItems(role?: AppRole | null): NavItem[] {
-  return [
-    ...navigation,
-    ...((role === "admin" || role === "super_admin") ? adminNavigation : []),
-    ...(role === "super_admin" ? superAdminNavigation : []),
-  ];
+export function getNavItems(): NavItem[] {
+  return navigation;
 }

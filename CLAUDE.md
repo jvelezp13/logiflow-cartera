@@ -35,10 +35,7 @@ src/
 │       ├── clientes/           # Lista + detalle [codigo]
 │       ├── facturas/           # Lista con filtros
 │       ├── pre-facturacion/    # Modos: mora y cupo
-│       ├── alertas/            # 4 modos: cupo excedido/ocioso/inactivos/novedades
-│       ├── usuarios/           # Admin: gestion usuarios
-│       ├── tenants/            # Super admin: gestion tenants
-│       └── configuracion/      # Settings
+│       └── alertas/            # 4 modos: cupo excedido/ocioso/inactivos/novedades
 ├── components/
 │   ├── layout/                 # Header, Sidebar, MobileSidebar, DashboardShell
 │   ├── dashboard/              # KPI cards, charts, tablas top
@@ -91,6 +88,7 @@ src/
 - APP_ID = "cartera" — filtra permisos para esta app
 - getUserProfile() con INNER JOIN a app_permissions — falla si no tiene permiso
 - Middleware solo verifica auth (no roles por ruta)
+- Gestion de usuarios y tenants es centralizada en logiflow-admin (NO en esta app)
 
 ## Reglas de negocio
 
