@@ -88,7 +88,7 @@ src/
 - APP_ID = "cartera" — filtra permisos para esta app
 - getUserProfile() con INNER JOIN a app_permissions — falla si no tiene permiso
 - Middleware solo verifica auth (no roles por ruta)
-- Gestion de usuarios y tenants es centralizada en logiflow-admin (NO en esta app)
+- Gestion de usuarios y tenants es centralizada en Sync-Logiflow/logiflow-hub (NO en esta app)
 
 ## Reglas de negocio
 

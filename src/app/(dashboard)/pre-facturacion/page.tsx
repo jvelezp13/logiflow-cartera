@@ -20,16 +20,8 @@ import type {
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { PreFacturacionFiltros } from "@/components/pre-facturacion/pre-facturacion-filtros";
-import { getMoraBadgeStyles, SEVERIDAD_CONFIG } from "@/lib/severity";
+import { getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
 import Link from "next/link";
-
-
-// Color de la barra segun porcentaje de uso
-function getBarColor(pct: number): string {
-  if (pct > 100) return "bg-red-500";
-  if (pct > 80) return "bg-yellow-500";
-  return "bg-green-500";
-}
 
 export default async function PreFacturacionPage({
   searchParams,
@@ -208,7 +200,7 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${getBarColor(usoActualPct)}`}
+                        className={`h-full rounded-full transition-all ${getCupoBarColor(usoActualPct)}`}
                         style={{ width: `${Math.min(usoActualPct, 100)}%` }}
                       />
                     </div>

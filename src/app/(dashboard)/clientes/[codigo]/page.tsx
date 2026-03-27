@@ -12,12 +12,10 @@ import {
 import { getDetalleCliente } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { formatCurrencyFull } from "@/lib/format";
-import { format } from "date-fns";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { formatCurrencyFull, formatFechaLarga } from "@/lib/format";
 import { notFound } from "next/navigation";
-import { getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG } from "@/lib/severity";
+import { getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
+import { BotonVolver } from "@/components/boton-volver";
 
 export default async function DetalleClientePage({
   params,
@@ -34,14 +32,12 @@ export default async function DetalleClientePage({
     notFound();
   }
 
-  // Filtrar facturas castigadas (mora > 90) si el toggle esta desactivado
   const facturas = incluirCastigada
     ? todasFacturas
     : todasFacturas.filter((f) => (f.mora || 0) <= 90);
 
   const nombreDisplay = info.nombre_negocio || info.razon_social || codigo;
   const severidad = SEVERIDAD_CONFIG[getSeveridad(info.maxima_mora)];
-
 
   const cupo = info.cupo_asignado || 0;
   const porcentajeCupo = cupo > 0 ? (info.total_deuda / cupo) * 100 : null;
@@ -56,17 +52,9 @@ export default async function DetalleClientePage({
       />
 
       <div className="bg-slate-50 min-h-screen p-6 space-y-6">
-        <Link
-          href="/clientes"
-          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a clientes
-        </Link>
+        <BotonVolver fallbackHref="/clientes" label="Volver a clientes" />
 
-        {/* Seccion superior: Identidad + Financiero */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Columna izquierda: Identidad */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Informacion del Cliente</CardTitle>
@@ -122,7 +110,6 @@ export default async function DetalleClientePage({
             </CardContent>
           </Card>
 
-          {/* Columna derecha: Resumen financiero */}
           <Card className={`border-l-4 ${severidad.border}`}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -131,12 +118,11 @@ export default async function DetalleClientePage({
                   variant="outline"
                   className={`${severidad.bg} ${severidad.text} text-xs`}
                 >
-                  {severidad.label}
+                  {severidad.label} ({severidad.rango})
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Deuda total */}
               <div>
                 <p className="text-xs text-slate-400">Deuda Total</p>
                 <p className="text-2xl font-bold text-slate-900 tabular-nums">
@@ -144,7 +130,6 @@ export default async function DetalleClientePage({
                 </p>
               </div>
 
-              {/* Vencido / Por vencer */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-400">Vencido</p>
@@ -160,7 +145,6 @@ export default async function DetalleClientePage({
                 </div>
               </div>
 
-              {/* Cupo asignado */}
               {cupo > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -172,20 +156,13 @@ export default async function DetalleClientePage({
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        porcentajeCupo! > 100
-                          ? "bg-red-500"
-                          : porcentajeCupo! > 80
-                            ? "bg-yellow-500"
-                            : "bg-green-500"
-                      }`}
+                      className={`h-full rounded-full transition-all ${getCupoBarColor(porcentajeCupo!)}`}
                       style={{ width: `${Math.min(porcentajeCupo!, 100)}%` }}
                     />
                   </div>
                 </div>
               )}
 
-              {/* Facturas y mora */}
               <div className="flex items-center gap-4 text-xs text-slate-500 pt-1 border-t">
                 <span>
                   <span className="font-medium text-slate-700">
@@ -213,7 +190,6 @@ export default async function DetalleClientePage({
           </Card>
         </div>
 
-        {/* Tabla de facturas */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Facturas</CardTitle>
@@ -252,17 +228,10 @@ export default async function DetalleClientePage({
                         {factura.vendedor || "-"}
                       </TableCell>
                       <TableCell className="py-1.5 text-xs">
-                        {factura.fecha_factura
-                          ? format(new Date(factura.fecha_factura), "dd MMM yyyy")
-                          : "-"}
+                        {formatFechaLarga(factura.fecha_factura)}
                       </TableCell>
                       <TableCell className="py-1.5 text-xs">
-                        {factura.fecha_vencimiento
-                          ? format(
-                              new Date(factura.fecha_vencimiento),
-                              "dd MMM yyyy"
-                            )
-                          : "-"}
+                        {formatFechaLarga(factura.fecha_vencimiento)}
                       </TableCell>
                       <TableCell className="py-1.5">
                         <Badge variant="outline" className={`${moraBadge.classes} text-xs`}>
@@ -281,7 +250,6 @@ export default async function DetalleClientePage({
           </CardContent>
         </Card>
 
-        {/* Tabla de pedidos */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Pedidos Recientes</CardTitle>
@@ -314,7 +282,7 @@ export default async function DetalleClientePage({
                         {pedido.num_pedido}
                       </TableCell>
                       <TableCell className="py-1.5 text-xs">
-                        {format(new Date(pedido.fecha), "dd MMM yyyy")}
+                        {formatFechaLarga(pedido.fecha)}
                       </TableCell>
                       <TableCell className="py-1.5 text-xs">
                         {pedido.estado || "-"}

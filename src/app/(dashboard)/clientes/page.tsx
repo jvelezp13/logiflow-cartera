@@ -17,7 +17,6 @@ import { getSeveridad, SEVERIDAD_CONFIG } from "@/lib/severity";
 import { buildPageUrl } from "@/lib/url";
 import { FiltrosCartera } from "@/components/filtros-cartera";
 import { Paginacion } from "@/components/paginacion";
-import { Eye } from "lucide-react";
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
@@ -83,13 +82,12 @@ export default async function ClientesPage({
                   <TableHead className="text-xs py-2 text-right">Vencido</TableHead>
                   <TableHead className="text-xs py-2 text-right">Estado</TableHead>
                   <TableHead className="text-xs py-2 text-right">Facturas</TableHead>
-                  <TableHead className="text-xs py-2 w-12"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {clientes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
                       No se encontraron clientes
                     </TableCell>
                   </TableRow>
@@ -99,9 +97,12 @@ export default async function ClientesPage({
                     return (
                       <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-50">
                         <TableCell className="py-1.5">
-                          <span className="text-sm font-medium">
+                          <Link
+                            href={`/clientes/${cliente.codigo_cliente}`}
+                            className="text-sm font-medium text-blue-600 hover:underline"
+                          >
                             {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
-                          </span>
+                          </Link>
                           <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
                         </TableCell>
                         <TableCell className="text-xs text-slate-500 py-1.5">
@@ -117,9 +118,16 @@ export default async function ClientesPage({
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums py-1.5">
                           {Number(cliente.total_vencido) > 0 ? (
-                            <span className="text-red-600 font-medium">
-                              {formatCurrencyFull(Number(cliente.total_vencido))}
-                            </span>
+                            <div>
+                              <span className="text-red-600 font-medium">
+                                {formatCurrencyFull(Number(cliente.total_vencido))}
+                              </span>
+                              <div className="text-[10px] text-slate-400">
+                                {Number(cliente.total_deuda) > 0
+                                  ? ((Number(cliente.total_vencido) / Number(cliente.total_deuda)) * 100).toFixed(0)
+                                  : 0}% de la deuda
+                              </div>
+                            </div>
                           ) : (
                             <span className="text-slate-400">-</span>
                           )}
@@ -129,15 +137,6 @@ export default async function ClientesPage({
                         </TableCell>
                         <TableCell className="text-right text-xs text-slate-500 py-1.5">
                           {cliente.num_facturas}
-                        </TableCell>
-                        <TableCell className="py-1.5">
-                          <Link
-                            href={`/clientes/${cliente.codigo_cliente}`}
-                            className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                            aria-label={`Ver detalle de ${cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Link>
                         </TableCell>
                       </TableRow>
                     );

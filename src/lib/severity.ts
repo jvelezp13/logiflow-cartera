@@ -63,3 +63,9 @@ export const RANGOS = [
   { value: "61-90", label: "61-90 dias" },
   { value: "90+", label: "90+ dias" },
 ] as const;
+
+export function getCupoBarColor(pct: number): string {
+  if (pct > 100) return "bg-red-500";
+  if (pct > 80) return "bg-yellow-500";
+  return "bg-green-500";
+}
