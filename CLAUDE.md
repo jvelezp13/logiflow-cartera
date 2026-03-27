@@ -10,7 +10,15 @@ Sistema de gestion de cartera (cuentas por cobrar) multi-tenant. Visualiza mora,
 - shadcn/ui (estilo new-york) — componentes UI en src/components/ui/
 - Recharts — graficos dashboard
 - Vitest + Testing Library — tests
-- date-fns — manejo de fechas
+- Fechas con Intl.toLocaleDateString nativo (date-fns eliminado)
+
+## Supabase — Conexion y Keys
+
+- Proyecto: `reaahmkrqxpbvnmrwhrt` (linked en supabase/.temp/project-ref)
+- `.env.local` tiene: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `.env.local` NO tiene `SUPABASE_SERVICE_ROLE_KEY` — obtenerla con: `supabase projects api-keys --project-ref reaahmkrqxpbvnmrwhrt`
+- **IMPORTANTE**: La anon key sin sesion autenticada NO puede leer `sync_tenants`, `profiles`, `maestra_total` (RLS las bloquea). Para queries de diagnostico/admin usar SIEMPRE service_role key.
+- Tablas `cartera`, `clientes_credito`, `pedidos` SI devuelven datos con anon key (RLS diferente).
 
 ## Ecosistema Logiflow
 

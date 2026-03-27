@@ -11,16 +11,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search } from "lucide-react";
+import { Search, MessageSquare } from "lucide-react";
+import Link from "next/link";
 import { formatCurrencyFull } from "@/lib/format";
 import type { ClienteCredito } from "@/lib/queries/cartera-server";
 
 interface FiltrosCreditoProps {
   clientes: ClienteCredito[];
   modo: "cupo_sin_uso" | "credito_anulado";
+  codigosConNotas: string[];
 }
 
-export function FiltrosCredito({ clientes, modo }: FiltrosCreditoProps) {
+export function FiltrosCredito({ clientes, modo, codigosConNotas }: FiltrosCreditoProps) {
+  const clientesConNotas = useMemo(() => new Set(codigosConNotas), [codigosConNotas]);
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<string | null>(null);
 
@@ -119,9 +122,17 @@ export function FiltrosCredito({ clientes, modo }: FiltrosCreditoProps) {
                 filtrados.map((cliente) => (
                   <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-50">
                     <TableCell className="py-1.5">
-                      <span className="text-sm font-medium">
-                        {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/clientes/${cliente.codigo_cliente}`}
+                          className="text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
+                        </Link>
+                        {clientesConNotas.has(cliente.codigo_cliente) && (
+                          <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
                     </TableCell>
                     <TableCell className="text-xs text-slate-500 py-1.5">

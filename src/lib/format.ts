@@ -29,3 +29,23 @@ export function formatFechaLarga(fecha: string | null): string {
   const d = new Date(fecha + "T00:00:00");
   return d.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
 }
+
+/** Fecha relativa para timeline. Ej: `Hoy`, `Ayer`, `Hace 3 dias`, `10 mar 2026` */
+export function formatFechaRelativa(fechaISO: string): string {
+  const ahora = new Date();
+  const d = new Date(fechaISO);
+  const diffMs = ahora.getTime() - d.getTime();
+  const diffDias = Math.floor(diffMs / 86400000);
+
+  if (diffDias === 0) return "Hoy";
+  if (diffDias === 1) return "Ayer";
+  if (diffDias < 7) return `Hace ${diffDias} dias`;
+  return formatFechaLarga(fechaISO.split("T")[0]);
+}
+
+/** Header de grupo para timeline. Ej: `Marzo 2026` */
+export function formatMesGrupo(fechaISO: string): string {
+  const d = new Date(fechaISO);
+  const mes = d.toLocaleDateString("es-CO", { month: "long", year: "numeric" });
+  return mes.charAt(0).toUpperCase() + mes.slice(1);
+}

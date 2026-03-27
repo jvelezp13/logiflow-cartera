@@ -191,6 +191,7 @@ export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecid
     .from("vista_cliente_resumen")
     .select("*")
     .eq("tenant_id", tenantId)
+    .gt("total_deuda", 0)
     .order("total_deuda", { ascending: false })
     .limit(limit);
 
@@ -345,7 +346,8 @@ export async function getClientesConSaldo(options?: {
   let query = supabase
     .from("vista_cliente_resumen")
     .select("*", { count: "exact" })
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .gt("total_deuda", 0);
 
   if (!incluirCastigada) {
     query = query.lte("maxima_mora", 90);
@@ -444,7 +446,8 @@ export async function getConteoClientesConSaldo(): Promise<number> {
   let query = supabase
     .from("vista_cliente_resumen")
     .select("*", { count: "exact", head: true })
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .gt("total_deuda", 0);
 
   if (!incluirCastigada) {
     query = query.lte("maxima_mora", 90);

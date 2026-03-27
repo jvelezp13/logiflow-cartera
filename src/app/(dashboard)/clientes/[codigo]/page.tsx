@@ -10,12 +10,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getDetalleCliente } from "@/lib/queries/cartera-server";
+import { getNotasCliente } from "@/lib/queries/notas-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { formatCurrencyFull, formatFechaLarga } from "@/lib/format";
 import { notFound } from "next/navigation";
 import { getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
 import { BotonVolver } from "@/components/boton-volver";
+import { NotasTimeline } from "@/components/notas/notas-timeline";
 
 export default async function DetalleClientePage({
   params,
@@ -25,8 +27,8 @@ export default async function DetalleClientePage({
   const { codigo } = await params;
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
-  const { info, facturas: todasFacturas, pedidos } =
-    await getDetalleCliente(codigo);
+  const [{ info, facturas: todasFacturas, pedidos }, notas] =
+    await Promise.all([getDetalleCliente(codigo), getNotasCliente(codigo)]);
 
   if (!info) {
     notFound();
@@ -300,6 +302,11 @@ export default async function DetalleClientePage({
             </Table>
           </CardContent>
         </Card>
+        <NotasTimeline
+          notas={notas}
+          codigoCliente={codigo}
+          userRole={profile.role}
+        />
       </div>
     </>
   );

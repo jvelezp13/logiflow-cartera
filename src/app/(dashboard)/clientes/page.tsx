@@ -28,6 +28,8 @@ import { FiltrosCartera } from "@/components/filtros-cartera";
 import { Paginacion } from "@/components/paginacion";
 import { ClientesModos } from "@/components/clientes-modos";
 import { FiltrosCredito } from "@/components/filtros-credito";
+import { getClientesConNotas } from "@/lib/queries/notas-server";
+import { MessageSquare } from "lucide-react";
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
@@ -89,6 +91,12 @@ export default async function ClientesPage({
     creditoAnulado = await getClientesCreditoAnulado();
   }
 
+  const codigosVisibles =
+    modo === "con_saldo" ? clientes.map((c) => c.codigo_cliente) :
+    modo === "cupo_sin_uso" ? cupoSinUso.map((c) => c.codigo_cliente) :
+    creditoAnulado.map((c) => c.codigo_cliente);
+  const clientesConNotas = await getClientesConNotas(codigosVisibles);
+
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
   return (
@@ -116,7 +124,7 @@ export default async function ClientesPage({
                 total={total}
               />
             </Suspense>
-            <TablaConSaldo clientes={clientes} />
+            <TablaConSaldo clientes={clientes} clientesConNotas={clientesConNotas} />
             <Paginacion
               page={page}
               totalPages={totalPages}
@@ -128,17 +136,17 @@ export default async function ClientesPage({
         )}
 
         {modo === "cupo_sin_uso" && (
-          <FiltrosCredito clientes={cupoSinUso} modo="cupo_sin_uso" />
+          <FiltrosCredito clientes={cupoSinUso} modo="cupo_sin_uso" codigosConNotas={[...clientesConNotas]} />
         )}
         {modo === "credito_anulado" && (
-          <FiltrosCredito clientes={creditoAnulado} modo="credito_anulado" />
+          <FiltrosCredito clientes={creditoAnulado} modo="credito_anulado" codigosConNotas={[...clientesConNotas]} />
         )}
       </div>
     </>
   );
 }
 
-function TablaConSaldo({ clientes }: { clientes: ClienteEnriquecido[] }) {
+function TablaConSaldo({ clientes, clientesConNotas }: { clientes: ClienteEnriquecido[]; clientesConNotas: Set<string> }) {
   return (
     <Card>
       <CardContent className="p-0">
@@ -167,12 +175,17 @@ function TablaConSaldo({ clientes }: { clientes: ClienteEnriquecido[] }) {
                 return (
                   <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-50">
                     <TableCell className="py-1.5">
-                      <Link
-                        href={`/clientes/${cliente.codigo_cliente}`}
-                        className="text-sm font-medium text-blue-600 hover:underline"
-                      >
-                        {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/clientes/${cliente.codigo_cliente}`}
+                          className="text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
+                        </Link>
+                        {clientesConNotas.has(cliente.codigo_cliente) && (
+                          <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
                     </TableCell>
                     <TableCell className="text-xs text-slate-500 py-1.5">
