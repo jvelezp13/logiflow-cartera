@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,14 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrencyShort } from "@/lib/format";
+import { getSeveridad, SEVERIDAD_CONFIG } from "@/lib/severity";
 import type { ClienteEnriquecido } from "@/lib/queries/cartera-server";
-
-// Clasificacion por maxima_mora (mismos rangos que la torta)
-function getSeveridad(maxMora: number): { label: string; color: string } {
-  if (maxMora <= 5) return { label: "Tolerable", color: "text-green-600" };
-  if (maxMora <= 20) return { label: "Atencion", color: "text-yellow-600" };
-  return { label: "Critico", color: "text-red-600" };
-}
 
 interface TopClientesTableProps {
   clientes: ClienteEnriquecido[];
@@ -41,13 +36,16 @@ export function TopClientesTable({ clientes }: TopClientesTableProps) {
           </TableHeader>
           <TableBody>
             {clientes.map((cliente) => {
-              const severidad = getSeveridad(cliente.maxima_mora);
+              const sevConfig = SEVERIDAD_CONFIG[getSeveridad(cliente.maxima_mora)];
               return (
                 <TableRow key={cliente.codigo_cliente}>
                   <TableCell className="py-1.5">
-                    <span className="text-sm font-medium">
+                    <Link
+                      href={`/clientes/${cliente.codigo_cliente}`}
+                      className="text-sm font-medium text-blue-600 hover:underline"
+                    >
                       {cliente.nombre_negocio || cliente.razon_social || cliente.codigo_cliente}
-                    </span>
+                    </Link>
                     <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
                   </TableCell>
                   <TableCell className="text-xs text-slate-500 py-1.5">
@@ -56,8 +54,8 @@ export function TopClientesTable({ clientes }: TopClientesTableProps) {
                   <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
                     {formatCurrencyShort(Number(cliente.total_deuda))}
                   </TableCell>
-                  <TableCell className={`text-right text-xs font-medium py-1.5 ${severidad.color}`}>
-                    {severidad.label}
+                  <TableCell className={`text-right text-xs font-medium py-1.5 ${sevConfig.text}`}>
+                    {sevConfig.label}
                   </TableCell>
                 </TableRow>
               );

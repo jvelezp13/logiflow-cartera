@@ -2,13 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrencyShort } from "@/lib/format";
+import { SEVERIDAD_CONFIG, type Severidad } from "@/lib/severity";
 import type { ResumenSeveridad } from "@/lib/queries/cartera-server";
-
-const ESTILOS: Record<string, { label: string; accent: string; textColor: string }> = {
-  tolerable: { label: "Tolerable", accent: "border-l-green-500", textColor: "text-green-600" },
-  atencion: { label: "Atencion", accent: "border-l-yellow-500", textColor: "text-yellow-600" },
-  critico: { label: "Critico", accent: "border-l-red-500", textColor: "text-red-600" },
-};
 
 interface KpiCardsProps {
   resumen: ResumenSeveridad;
@@ -29,12 +24,17 @@ export function KpiCards({ resumen }: KpiCardsProps) {
         </CardContent>
       </Card>
       {resumen.grupos.map((g) => {
-        const estilo = ESTILOS[g.severidad];
-        if (!estilo) return null;
+        const config = SEVERIDAD_CONFIG[g.severidad as Severidad];
+        if (!config) return null;
         return (
-          <Card key={g.severidad} className={`border-l-4 ${estilo.accent}`}>
+          <Card key={g.severidad} className={`border-l-4 ${config.border}`}>
             <CardContent className="py-3 px-4">
-              <p className={`text-xs font-medium ${estilo.textColor}`}>{estilo.label}</p>
+              <div className="flex items-center gap-1.5">
+                <p className={`text-xs font-medium ${config.text}`}>{config.label}</p>
+                <span className="text-[10px] text-slate-400">
+                  ({config.rango})
+                </span>
+              </div>
               <p className="text-xl font-semibold text-slate-900 tabular-nums">
                 {formatCurrencyShort(g.total)}
               </p>

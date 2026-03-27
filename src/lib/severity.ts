@@ -10,6 +10,7 @@ export function getSeveridad(mora: number): Severidad {
 export const SEVERIDAD_CONFIG = {
   tolerable: {
     label: "Tolerable",
+    rango: "0-5 dias de mora",
     text: "text-green-600",
     bg: "bg-green-50",
     border: "border-l-green-500",
@@ -19,6 +20,7 @@ export const SEVERIDAD_CONFIG = {
   },
   atencion: {
     label: "Atencion",
+    rango: "6-20 dias de mora",
     text: "text-yellow-600",
     bg: "bg-yellow-50",
     border: "border-l-yellow-500",
@@ -28,6 +30,7 @@ export const SEVERIDAD_CONFIG = {
   },
   critico: {
     label: "Critico",
+    rango: "mas de 20 dias",
     text: "text-red-600",
     bg: "bg-red-50",
     border: "border-l-red-500",
