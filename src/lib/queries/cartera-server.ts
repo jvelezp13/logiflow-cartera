@@ -436,6 +436,159 @@ export async function getDetalleCliente(codigoCliente: string): Promise<{
   };
 }
 
+export async function getConteoClientesConSaldo(): Promise<number> {
+  const tenantId = await getTenantId();
+  const incluirCastigada = await getIncluirCastigada();
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("vista_cliente_resumen")
+    .select("*", { count: "exact", head: true })
+    .eq("tenant_id", tenantId);
+
+  if (!incluirCastigada) {
+    query = query.lte("maxima_mora", 90);
+  }
+
+  const { count } = await query;
+  return count || 0;
+}
+
+// --- Credito ---
+
+export interface ClienteCredito {
+  codigo_cliente: string;
+  nombre_negocio: string | null;
+  razon_social: string | null;
+  ciudad: string | null;
+  estado_cliente: string | null;
+  cupo: number;
+  plazo: number;
+  estado_credito: string;
+}
+
+// Helper: enriquecer filas de clientes_credito con datos de maestra_total
+async function enriquecerConMaestra(
+  creditoRows: { codigo_cliente: unknown; cupo: unknown; plazo: unknown; estado: unknown }[],
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tenantId: string,
+): Promise<ClienteCredito[]> {
+  if (creditoRows.length === 0) return [];
+
+  const codigos = creditoRows.map((c) => c.codigo_cliente as string);
+  const { data: maestraData } = await supabase
+    .from("maestra_total")
+    .select("codigo_ecom, nombre_negocio, razon_social, ciudad, estado")
+    .eq("tenant_id", tenantId)
+    .in("codigo_ecom", codigos);
+
+  const maestraMap = new Map(
+    (maestraData || []).map((m) => [m.codigo_ecom, m])
+  );
+
+  return creditoRows.map((c) => {
+    const m = maestraMap.get(c.codigo_cliente as string);
+    return {
+      codigo_cliente: c.codigo_cliente as string,
+      nombre_negocio: m?.nombre_negocio ?? null,
+      razon_social: m?.razon_social ?? null,
+      ciudad: m?.ciudad ?? null,
+      estado_cliente: m?.estado ?? null,
+      cupo: Number(c.cupo || 0),
+      plazo: Number(c.plazo || 0),
+      estado_credito: c.estado as string,
+    };
+  }).sort((a, b) => b.cupo - a.cupo);
+}
+
+export async function getConteoCupoSinUso(): Promise<number> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const [creditoResult, carteraResult] = await Promise.all([
+    supabase
+      .from("clientes_credito")
+      .select("codigo_cliente")
+      .eq("tenant_id", tenantId)
+      .eq("estado", "Activo")
+      .gt("cupo", 0),
+    supabase
+      .from("cartera")
+      .select("codigo_cliente")
+      .eq("tenant_id", tenantId),
+  ]);
+
+  if (creditoResult.error) throw creditoResult.error;
+  if (carteraResult.error) throw carteraResult.error;
+
+  const clientesConCartera = new Set(
+    (carteraResult.data || []).map((c) => c.codigo_cliente as string)
+  );
+
+  return (creditoResult.data || []).filter(
+    (c) => !clientesConCartera.has(c.codigo_cliente as string)
+  ).length;
+}
+
+export async function getConteoCreditoAnulado(): Promise<number> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { count, error } = await supabase
+    .from("clientes_credito")
+    .select("*", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("estado", "Anulado");
+
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function getClientesCupoSinUso(): Promise<ClienteCredito[]> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const [creditoResult, carteraResult] = await Promise.all([
+    supabase
+      .from("clientes_credito")
+      .select("codigo_cliente, cupo, plazo, estado")
+      .eq("tenant_id", tenantId)
+      .eq("estado", "Activo")
+      .gt("cupo", 0),
+    supabase
+      .from("cartera")
+      .select("codigo_cliente")
+      .eq("tenant_id", tenantId),
+  ]);
+
+  if (creditoResult.error) throw creditoResult.error;
+  if (carteraResult.error) throw carteraResult.error;
+
+  const clientesConCartera = new Set(
+    (carteraResult.data || []).map((c) => c.codigo_cliente as string)
+  );
+
+  const sinUso = (creditoResult.data || []).filter(
+    (c) => !clientesConCartera.has(c.codigo_cliente as string)
+  );
+
+  return enriquecerConMaestra(sinUso, supabase, tenantId);
+}
+
+export async function getClientesCreditoAnulado(): Promise<ClienteCredito[]> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { data: creditoData, error } = await supabase
+    .from("clientes_credito")
+    .select("codigo_cliente, cupo, plazo, estado")
+    .eq("tenant_id", tenantId)
+    .eq("estado", "Anulado");
+
+  if (error) throw error;
+  return enriquecerConMaestra(creditoData || [], supabase, tenantId);
+}
+
 // --- Filtros ---
 
 export async function getCiudades(): Promise<string[]> {
