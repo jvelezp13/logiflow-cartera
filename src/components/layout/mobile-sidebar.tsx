@@ -25,8 +25,8 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
       <SheetContent side="left" className="w-64 bg-slate-900 text-white p-0 border-0">
         <SheetHeader className="px-6 py-5 border-b border-slate-800">
           <SheetTitle className="flex items-center gap-2 text-white">
-            <TrendingDown className="h-6 w-6 text-blue-400" />
-            <span className="text-lg font-semibold">Logiflow</span>
+            <TrendingDown className="h-6 w-6 text-emerald-400" />
+            <span className="text-lg font-semibold">Logiflow Cartera</span>
           </SheetTitle>
         </SheetHeader>
 
@@ -45,7 +45,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-blue-600 text-white"
+                    ? "bg-emerald-600 text-white"
                     : "text-slate-300 hover:bg-slate-800 hover:text-white",
                 )}
               >

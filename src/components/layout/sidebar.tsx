@@ -12,8 +12,8 @@ export function Sidebar() {
   return (
     <div className="hidden md:flex flex-col h-full bg-slate-900 text-white w-64">
       <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-800">
-        <TrendingDown className="h-6 w-6 text-blue-400" />
-        <span className="text-lg font-semibold">Logiflow</span>
+        <TrendingDown className="h-6 w-6 text-emerald-400" />
+        <span className="text-lg font-semibold">Logiflow Cartera</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Navegacion principal">
@@ -30,7 +30,7 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-blue-600 text-white"
+                  ? "bg-emerald-600 text-white"
                   : "text-slate-300 hover:bg-slate-800 hover:text-white",
               )}
             >

@@ -33,7 +33,7 @@ export interface ClienteInactivo {
   ciudad: string | null;
   total_deuda: number;
   total_vencido: number;
-  dias_sin_pedido: number;
+  dias_sin_pedido: number | null;
   ultimo_pedido_fecha: string | null;
 }
 
@@ -60,11 +60,14 @@ const TIPOS_CARTERA = [
 // --- Queries ---
 
 /**
- * Clientes con cupo activo cuyo uso de deuda vs cupo supera el 80%.
- * Se trae todos los activos con cupo > 0 y filtra en JS
- * (PostgREST no soporta WHERE con columnas calculadas).
+ * Clientes con cupo activo: excedido (>80%) y ocioso (<50%) en UNA sola query.
+ * No filtra por castigada — el cupo mide exposicion crediticia total,
+ * independiente de la antiguedad de la mora.
  */
-export async function getClientesCupoExcedidoAlertas(): Promise<ClienteCupoAlerta[]> {
+export async function getClientesCupo(): Promise<{
+  excedido: ClienteCupoAlerta[];
+  ocioso: ClienteCupoOcioso[];
+}> {
   const tenantId = await getTenantId();
   const supabase = await createClient();
 
@@ -77,77 +80,48 @@ export async function getClientesCupoExcedidoAlertas(): Promise<ClienteCupoAlert
 
   if (error) throw error;
 
-  const resultado: ClienteCupoAlerta[] = [];
+  const excedido: ClienteCupoAlerta[] = [];
+  const ocioso: ClienteCupoOcioso[] = [];
+
   for (const c of data || []) {
     const cupo = Number(c.cupo_asignado || 0);
     const deuda = Number(c.total_deuda || 0);
-    if (cupo <= 0) continue;
-
     const uso = (deuda / cupo) * 100;
-    if (uso < 80) continue;
 
-    // Nivel segun porcentaje
-    const nivel: ClienteCupoAlerta["nivel"] =
-      uso > 95 ? "critica" : uso > 90 ? "alta" : "media";
-
-    resultado.push({
-      codigo_cliente: c.codigo_cliente,
-      nombre_negocio: c.nombre_negocio,
-      ciudad: c.ciudad,
-      cupo_asignado: cupo,
-      total_deuda: deuda,
-      uso_porcentaje: uso,
-      nivel,
-    });
+    if (uso >= 80) {
+      const nivel: ClienteCupoAlerta["nivel"] =
+        uso > 95 ? "critica" : uso > 90 ? "alta" : "media";
+      excedido.push({
+        codigo_cliente: c.codigo_cliente,
+        nombre_negocio: c.nombre_negocio,
+        ciudad: c.ciudad,
+        cupo_asignado: cupo,
+        total_deuda: deuda,
+        uso_porcentaje: uso,
+        nivel,
+      });
+    } else if (uso < 50) {
+      ocioso.push({
+        codigo_cliente: c.codigo_cliente,
+        nombre_negocio: c.nombre_negocio,
+        ciudad: c.ciudad,
+        cupo_asignado: cupo,
+        total_deuda: deuda,
+        uso_porcentaje: uso,
+      });
+    }
   }
 
-  // Mayor uso primero
-  resultado.sort((a, b) => b.uso_porcentaje - a.uso_porcentaje);
-  return resultado;
-}
+  excedido.sort((a, b) => b.uso_porcentaje - a.uso_porcentaje);
+  ocioso.sort((a, b) => a.uso_porcentaje - b.uso_porcentaje);
 
-/**
- * Clientes activos usando menos del 50% de su cupo (cupo ocioso).
- */
-export async function getClientesCupoOcioso(): Promise<ClienteCupoOcioso[]> {
-  const tenantId = await getTenantId();
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("vista_cliente_resumen")
-    .select("codigo_cliente, nombre_negocio, ciudad, cupo_asignado, total_deuda, estado_credito")
-    .eq("tenant_id", tenantId)
-    .eq("estado_credito", "Activo")
-    .gt("cupo_asignado", 0);
-
-  if (error) throw error;
-
-  const resultado: ClienteCupoOcioso[] = [];
-  for (const c of data || []) {
-    const cupo = Number(c.cupo_asignado || 0);
-    const deuda = Number(c.total_deuda || 0);
-    if (cupo <= 0) continue;
-
-    const uso = (deuda / cupo) * 100;
-    if (uso >= 50) continue;
-
-    resultado.push({
-      codigo_cliente: c.codigo_cliente,
-      nombre_negocio: c.nombre_negocio,
-      ciudad: c.ciudad,
-      cupo_asignado: cupo,
-      total_deuda: deuda,
-      uso_porcentaje: uso,
-    });
-  }
-
-  // Menor uso primero
-  resultado.sort((a, b) => a.uso_porcentaje - b.uso_porcentaje);
-  return resultado;
+  return { excedido, ocioso };
 }
 
 /**
  * Clientes con deuda vencida pero sin pedidos en 30+ dias.
+ * Incluye clientes sin pedidos registrados (la tabla pedidos se poda a 30 dias,
+ * asi que null = sin actividad reciente confirmada).
  * Respeta filtro de cartera castigada.
  */
 export async function getClientesInactivos(): Promise<ClienteInactivo[]> {
@@ -165,21 +139,21 @@ export async function getClientesInactivos(): Promise<ClienteInactivo[]> {
     query = query.lte("maxima_mora", 90);
   }
 
+  // Filtrar en DB: sin pedidos o ultimo pedido hace 30+ dias
+  const fechaCorte = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+  query = query.or(`ultimo_pedido_fecha.is.null,ultimo_pedido_fecha.lte.${fechaCorte}`);
+
   const { data, error } = await query;
   if (error) throw error;
 
   const ahora = Date.now();
-  const limite30d = 30 * 86400000; // 30 dias en ms
-
   const resultado: ClienteInactivo[] = [];
   for (const c of data || []) {
-    if (!c.ultimo_pedido_fecha) continue;
-
-    const fechaUltimo = new Date(c.ultimo_pedido_fecha + "T00:00:00");
-    const diff = ahora - fechaUltimo.getTime();
-    if (diff < limite30d) continue;
-
-    const diasSinPedido = Math.floor(diff / 86400000);
+    let diasSinPedido: number | null = null;
+    if (c.ultimo_pedido_fecha) {
+      const diff = ahora - new Date(c.ultimo_pedido_fecha + "T00:00:00").getTime();
+      diasSinPedido = Math.floor(diff / 86400000);
+    }
 
     resultado.push({
       codigo_cliente: c.codigo_cliente,
@@ -192,14 +166,18 @@ export async function getClientesInactivos(): Promise<ClienteInactivo[]> {
     });
   }
 
-  // Mayor deuda primero
-  resultado.sort((a, b) => b.total_deuda - a.total_deuda);
+  // Sin pedidos primero (mas preocupante), luego por mayor deuda
+  resultado.sort((a, b) => {
+    if (a.dias_sin_pedido === null && b.dias_sin_pedido !== null) return -1;
+    if (a.dias_sin_pedido !== null && b.dias_sin_pedido === null) return 1;
+    return b.total_deuda - a.total_deuda;
+  });
   return resultado;
 }
 
 /**
- * Novedades de sync_alertas (7 tipos cartera-relevantes, ultimos 30 dias).
- * Retorna array vacio si la tabla no existe.
+ * Novedades de sync_alertas (tipos cartera-relevantes, ultimos 30 dias).
+ * Retorna array vacio si la tabla no existe (es propiedad de Sync-Logiflow).
  */
 export async function getNovedadesSync(): Promise<NovedadSync[]> {
   const tenantId = await getTenantId();
@@ -217,9 +195,8 @@ export async function getNovedadesSync(): Promise<NovedadSync[]> {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  // Si la tabla no existe, retornar vacio sin romper la pagina
   if (error) {
-    console.warn("sync_alertas no disponible:", error.message);
+    console.warn("[alertas] sync_alertas no disponible:", error.code, error.message);
     return [];
   }
 

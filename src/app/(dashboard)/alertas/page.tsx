@@ -9,8 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  getClientesCupoExcedidoAlertas,
-  getClientesCupoOcioso,
+  getClientesCupo,
   getClientesInactivos,
   getNovedadesSync,
 } from "@/lib/queries/alertas-server";
@@ -40,20 +39,19 @@ export default async function AlertasPage({
     ? (params.modo as Modo)
     : "cupo_excedido";
 
-  // Ejecutar todas las queries en paralelo para tener los conteos
-  const [profile, incluirCastigada, cupoExcedido, cupoOcioso, inactivos, novedades] =
+  // Queries en paralelo — cupo excedido y ocioso comparten UNA sola query
+  const [profile, incluirCastigada, cupo, inactivos, novedades] =
     await Promise.all([
       getUserProfile(),
       getIncluirCastigada(),
-      getClientesCupoExcedidoAlertas(),
-      getClientesCupoOcioso(),
+      getClientesCupo(),
       getClientesInactivos(),
       getNovedadesSync(),
     ]);
 
   const conteos = {
-    cupo_excedido: cupoExcedido.length,
-    cupo_ocioso: cupoOcioso.length,
+    cupo_excedido: cupo.excedido.length,
+    cupo_ocioso: cupo.ocioso.length,
     inactivos: inactivos.length,
     novedades: novedades.length,
   };
@@ -72,8 +70,8 @@ export default async function AlertasPage({
 
         <Card>
           <CardContent className="p-0">
-            {modo === "cupo_excedido" && <TablaCupoExcedido clientes={cupoExcedido} />}
-            {modo === "cupo_ocioso" && <TablaCupoOcioso clientes={cupoOcioso} />}
+            {modo === "cupo_excedido" && <TablaCupoExcedido clientes={cupo.excedido} />}
+            {modo === "cupo_ocioso" && <TablaCupoOcioso clientes={cupo.ocioso} />}
             {modo === "inactivos" && <TablaInactivos clientes={inactivos} />}
             {modo === "novedades" && <TablaNovedades novedades={novedades} />}
           </CardContent>
@@ -110,8 +108,9 @@ function getNivelBadge(nivel: ClienteCupoAlerta["nivel"]) {
   return { classes: estilos[nivel], label: labels[nivel] };
 }
 
-// Badge de dias sin pedido para inactivos
-function getDiasBadge(dias: number) {
+// Badge de dias sin pedido para inactivos (null = pedidos podados, sin registro reciente)
+function getDiasBadge(dias: number | null) {
+  if (dias === null) return { classes: "bg-red-100 text-red-700", label: ">30d" };
   if (dias > 60) return { classes: "bg-red-100 text-red-700", label: `${dias}d` };
   if (dias > 45) return { classes: "bg-yellow-100 text-yellow-700", label: `${dias}d` };
   return { classes: "bg-slate-100 text-slate-700", label: `${dias}d` };
@@ -377,7 +376,15 @@ function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
                   </span>
                 </TableCell>
                 <TableCell className="text-sm py-1.5">
-                  {n.mensaje || n.referencia || "-"}
+                  <div>{n.mensaje || "-"}</div>
+                  {n.referencia && (
+                    <Link
+                      href={`/clientes/${n.referencia}`}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      {n.referencia}
+                    </Link>
+                  )}
                 </TableCell>
               </TableRow>
             );
