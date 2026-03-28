@@ -604,29 +604,26 @@ export async function getSegmentos(): Promise<string[]> {
 
 // --- Pre-facturacion ---
 
-/**
- * Clientes con mora > 5 dias que tienen pedidos "Sin Descargar" pendientes.
- * Agrupa todos los pedidos por cliente (sin filtro de fecha).
- * Estrategia: 2 queries secuenciales para evitar N+1.
- */
-export async function getClientesMoraConPedidos(): Promise<ClientePreFacturacionMora[]> {
+/** Pedidos "Sin Descargar" agrupados por cliente (query + agrupacion compartida entre mora y cupo) */
+async function getPedidosAgrupadosPorCliente(): Promise<{
+  pedidosPorCliente: Map<string, { total: number; cantidad: number }>;
+  codigos: string[];
+} | null> {
   const tenantId = await getTenantId();
   const supabase = await createClient();
 
-  // Query 1: todos los pedidos sin descargar (sin filtro de fecha)
-  const { data: pedidosRaw, error: errorPedidos } = await supabase
+  const { data, error } = await supabase
     .from("vista_pedidos_enriquecida")
     .select("codigo_cliente, pedido_total")
     .eq("tenant_id", tenantId)
     .eq("estado", "Sin Descargar")
     .eq("tipo", "PEDIDO");
 
-  if (errorPedidos) throw errorPedidos;
-  if (!pedidosRaw || pedidosRaw.length === 0) return [];
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
 
-  // Agrupar pedidos por cliente: sumar totales y contar
   const pedidosPorCliente = new Map<string, { total: number; cantidad: number }>();
-  for (const p of pedidosRaw) {
+  for (const p of data) {
     const codigo = p.codigo_cliente as string;
     const monto = Number(p.pedido_total || 0);
     const existing = pedidosPorCliente.get(codigo);
@@ -638,7 +635,20 @@ export async function getClientesMoraConPedidos(): Promise<ClientePreFacturacion
     }
   }
 
-  const codigosUnicos = [...pedidosPorCliente.keys()];
+  return { pedidosPorCliente, codigos: [...pedidosPorCliente.keys()] };
+}
+
+/**
+ * Clientes con mora > 5 dias que tienen pedidos "Sin Descargar" pendientes.
+ * Agrupa todos los pedidos por cliente (sin filtro de fecha).
+ */
+export async function getClientesMoraConPedidos(): Promise<ClientePreFacturacionMora[]> {
+  const agrupados = await getPedidosAgrupadosPorCliente();
+  if (!agrupados) return [];
+
+  const { pedidosPorCliente, codigos: codigosUnicos } = agrupados;
+  const supabase = await createClient();
+  const tenantId = await getTenantId();
 
   // Query 2: solo clientes con mora > 5 (atencion o critico)
   const { data: clientesRaw, error: errorClientes } = await supabase
@@ -686,35 +696,12 @@ export interface ClienteCupoExcedido {
  * Agrupa todos los pedidos del mismo cliente para un calculo correcto.
  */
 export async function getClientesCupoExcedido(): Promise<ClienteCupoExcedido[]> {
-  const tenantId = await getTenantId();
+  const agrupados = await getPedidosAgrupadosPorCliente();
+  if (!agrupados) return [];
+
+  const { pedidosPorCliente, codigos: codigosUnicos } = agrupados;
   const supabase = await createClient();
-
-  // Query 1: todos los pedidos sin descargar (sin filtro de fecha)
-  const { data: pedidosRaw, error: errorPedidos } = await supabase
-    .from("vista_pedidos_enriquecida")
-    .select("codigo_cliente, pedido_total")
-    .eq("tenant_id", tenantId)
-    .eq("estado", "Sin Descargar")
-    .eq("tipo", "PEDIDO");
-
-  if (errorPedidos) throw errorPedidos;
-  if (!pedidosRaw || pedidosRaw.length === 0) return [];
-
-  // Agrupar pedidos por cliente: sumar totales y contar
-  const pedidosPorCliente = new Map<string, { total: number; cantidad: number }>();
-  for (const p of pedidosRaw) {
-    const codigo = p.codigo_cliente as string;
-    const monto = Number(p.pedido_total || 0);
-    const existing = pedidosPorCliente.get(codigo);
-    if (existing) {
-      existing.total += monto;
-      existing.cantidad += 1;
-    } else {
-      pedidosPorCliente.set(codigo, { total: monto, cantidad: 1 });
-    }
-  }
-
-  const codigosUnicos = [...pedidosPorCliente.keys()];
+  const tenantId = await getTenantId();
 
   // Query 2: datos de clientes con cupo asignado
   const { data: clientesRaw, error: errorClientes } = await supabase

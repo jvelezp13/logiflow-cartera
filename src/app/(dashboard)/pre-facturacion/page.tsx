@@ -22,7 +22,7 @@ import { getIncluirCastigada } from "@/lib/castigada";
 import { getNotasIndicador } from "@/lib/queries/notas-server";
 import { PreFacturacionFiltros } from "@/components/pre-facturacion/pre-facturacion-filtros";
 import { CopiarResumen } from "@/components/pre-facturacion/copiar-resumen";
-import { SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
+import { getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
 import { ArrowDownWideNarrow } from "lucide-react";
 import { MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -53,8 +53,7 @@ export default async function PreFacturacionPage({
     ? clientesMora.reduce((acc, c) => acc + c.total_vencido, 0)
     : clientesCupo.reduce((acc, c) => acc + c.excede_por, 0);
 
-  const etiquetaConteo = modo === "mora" ? "clientes" : "clientes";
-  const resumenWhatsApp = generarResumenWhatsApp(modo, clientesMora, clientesCupo);
+  const resumenWhatsApp = generarResumenWhatsApp(modo, clientesActivos, totalClientes, totalPedidos, montoRiesgo);
 
   return (
     <>
@@ -67,7 +66,7 @@ export default async function PreFacturacionPage({
 
       <div className="p-6 space-y-4 bg-slate-50 min-h-screen">
         <div className="flex items-center justify-between">
-          <PreFacturacionFiltros total={totalClientes} etiquetaConteo={etiquetaConteo} />
+          <PreFacturacionFiltros total={totalClientes} etiquetaConteo="clientes" />
           {totalClientes > 0 && <CopiarResumen texto={resumenWhatsApp} />}
         </div>
 
@@ -145,6 +144,7 @@ function TablaMora({
         ) : (
           clientes.map((cliente) => {
             const sevCfg = SEVERIDAD_CONFIG[cliente.severidad];
+            const moraBadge = getMoraBadgeStyles(cliente.maxima_mora);
             return (
               <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
@@ -173,10 +173,8 @@ function TablaMora({
                   </span>
                 </TableCell>
                 <TableCell className="text-center py-1.5">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    cliente.maxima_mora > 20 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
-                  }`}>
-                    {cliente.maxima_mora} dias
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${moraBadge.classes}`}>
+                    {moraBadge.label}
                   </span>
                 </TableCell>
                 <TableCell className="text-right text-sm font-medium tabular-nums py-1.5 text-red-600">
@@ -290,35 +288,31 @@ function TablaCupo({
 // --- Generador de texto para WhatsApp ---
 function generarResumenWhatsApp(
   modo: "mora" | "cupo",
-  clientesMora: ClientePreFacturacionMora[],
-  clientesCupo: ClienteCupoExcedido[],
+  clientes: (ClientePreFacturacionMora | ClienteCupoExcedido)[],
+  totalClientes: number,
+  totalPedidos: number,
+  montoRiesgo: number,
 ): string {
   const hoy = new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
   const titulo = modo === "mora" ? "Mora" : "Cupo";
   const lineas: string[] = [`*Pre-facturación — ${titulo} — ${hoy}*`, ""];
 
-  if (modo === "mora") {
-    for (const c of clientesMora) {
-      const nombre = c.nombre_negocio || c.codigo_cliente;
-      lineas.push(
-        `${c.codigo_cliente} — ${nombre} — ${c.cantidad_pedidos} pedido${c.cantidad_pedidos > 1 ? "s" : ""} — Mora ${c.maxima_mora} dias — Vencido ${formatCurrencyShort(c.total_vencido)}`
-      );
+  for (const c of clientes) {
+    const nombre = c.nombre_negocio || c.codigo_cliente;
+    const pedidos = `${c.cantidad_pedidos} pedido${c.cantidad_pedidos > 1 ? "s" : ""}`;
+
+    if (modo === "mora") {
+      const cm = c as ClientePreFacturacionMora;
+      lineas.push(`${cm.codigo_cliente} — ${nombre} — ${pedidos} — Mora ${cm.maxima_mora} dias — Vencido ${formatCurrencyShort(cm.total_vencido)}`);
+    } else {
+      const cc = c as ClienteCupoExcedido;
+      const pct = ((cc.total_deuda + cc.total_pedidos) / cc.cupo_asignado * 100).toFixed(0);
+      lineas.push(`${cc.codigo_cliente} — ${nombre} — ${pedidos} — Excede ${formatCurrencyShort(cc.excede_por)} (${pct}%)`);
     }
-    const totalPedidos = clientesMora.reduce((acc, c) => acc + c.cantidad_pedidos, 0);
-    const totalVencido = clientesMora.reduce((acc, c) => acc + c.total_vencido, 0);
-    lineas.push("", `${clientesMora.length} clientes | ${totalPedidos} pedidos | Vencido: ${formatCurrencyShort(totalVencido)}`);
-  } else {
-    for (const c of clientesCupo) {
-      const nombre = c.nombre_negocio || c.codigo_cliente;
-      const pct = ((c.total_deuda + c.total_pedidos) / c.cupo_asignado * 100).toFixed(0);
-      lineas.push(
-        `${c.codigo_cliente} — ${nombre} — ${c.cantidad_pedidos} pedido${c.cantidad_pedidos > 1 ? "s" : ""} — Excede ${formatCurrencyShort(c.excede_por)} (${pct}%)`
-      );
-    }
-    const totalPedidos = clientesCupo.reduce((acc, c) => acc + c.cantidad_pedidos, 0);
-    const totalExceso = clientesCupo.reduce((acc, c) => acc + c.excede_por, 0);
-    lineas.push("", `${clientesCupo.length} clientes | ${totalPedidos} pedidos | Exceso: ${formatCurrencyShort(totalExceso)}`);
   }
+
+  const etiquetaMonto = modo === "mora" ? "Vencido" : "Exceso";
+  lineas.push("", `${totalClientes} clientes | ${totalPedidos} pedidos | ${etiquetaMonto}: ${formatCurrencyShort(montoRiesgo)}`);
 
   return lineas.join("\n");
 }

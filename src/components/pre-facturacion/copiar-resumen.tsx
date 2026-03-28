@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
 
 interface CopiarResumenProps {
@@ -10,11 +10,16 @@ interface CopiarResumenProps {
 export function CopiarResumen({ texto }: CopiarResumenProps) {
   const [copiado, setCopiado] = useState(false);
 
-  const copiar = async () => {
+  useEffect(() => {
+    if (!copiado) return;
+    const id = setTimeout(() => setCopiado(false), 2000);
+    return () => clearTimeout(id);
+  }, [copiado]);
+
+  const copiar = useCallback(async () => {
     await navigator.clipboard.writeText(texto);
     setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
-  };
+  }, [texto]);
 
   return (
     <button
