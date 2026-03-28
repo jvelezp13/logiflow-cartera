@@ -21,9 +21,10 @@ const MODOS = [
 
 interface PreFacturacionFiltrosProps {
   total: number;
+  etiquetaConteo: string;
 }
 
-export function PreFacturacionFiltros({ total }: PreFacturacionFiltrosProps) {
+export function PreFacturacionFiltros({ total, etiquetaConteo }: PreFacturacionFiltrosProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -42,7 +43,6 @@ export function PreFacturacionFiltros({ total }: PreFacturacionFiltrosProps) {
 
   return (
     <div className="flex items-center gap-3">
-      {/* Chips de modo */}
       <div className="flex items-center gap-2">
         {MODOS.map((m) => (
           <button
@@ -57,9 +57,8 @@ export function PreFacturacionFiltros({ total }: PreFacturacionFiltrosProps) {
         ))}
       </div>
 
-      {/* Conteo de resultados */}
       <span className="text-xs text-slate-500 whitespace-nowrap tabular-nums ml-auto">
-        {total} pedidos
+        {total} {etiquetaConteo}
       </span>
     </div>
   );

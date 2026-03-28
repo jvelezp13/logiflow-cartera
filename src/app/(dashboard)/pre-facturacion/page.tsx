@@ -21,6 +21,7 @@ import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { PreFacturacionFiltros } from "@/components/pre-facturacion/pre-facturacion-filtros";
 import { getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
+import { ArrowDownWideNarrow } from "lucide-react";
 import Link from "next/link";
 
 export default async function PreFacturacionPage({
@@ -29,17 +30,17 @@ export default async function PreFacturacionPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const modo = (params.modo === "cupo" ? "cupo" : "mora") as "mora" | "cupo";
+  const modo = params.modo === "cupo" ? "cupo" : "mora";
 
-  const [profile, incluirCastigada] = await Promise.all([
+  const [profile, incluirCastigada, pedidosMora, clientesCupo] = await Promise.all([
     getUserProfile(),
     getIncluirCastigada(),
+    modo === "mora" ? getPedidosPreFacturacion() : Promise.resolve([]),
+    modo === "cupo" ? getClientesCupoExcedido() : Promise.resolve([]),
   ]);
 
-  // Solo ejecuta la query del modo activo
-  const pedidosMora = modo === "mora" ? await getPedidosPreFacturacion() : [];
-  const clientesCupo = modo === "cupo" ? await getClientesCupoExcedido() : [];
   const total = pedidosMora.length + clientesCupo.length;
+  const etiquetaConteo = modo === "mora" ? "pedidos" : "clientes";
 
   return (
     <>
@@ -51,10 +52,8 @@ export default async function PreFacturacionPage({
       />
 
       <div className="p-6 space-y-4 bg-slate-50 min-h-screen">
-        {/* Filtros */}
-        <PreFacturacionFiltros total={total} />
+        <PreFacturacionFiltros total={total} etiquetaConteo={etiquetaConteo} />
 
-        {/* Tabla segun modo */}
         <Card>
           <CardContent className="p-0">
             {modo === "mora" ? (
@@ -80,7 +79,11 @@ function TablaMora({ pedidos }: { pedidos: PedidoPreFacturacion[] }) {
           <TableHead className="text-xs py-2">Asesor</TableHead>
           <TableHead className="text-xs py-2 text-right">Valor Pedido</TableHead>
           <TableHead className="text-xs py-2 text-center">Severidad</TableHead>
-          <TableHead className="text-xs py-2 text-center">Mora</TableHead>
+          <TableHead className="text-xs py-2 text-center">
+            <span className="inline-flex items-center gap-1">
+              Mora <ArrowDownWideNarrow className="h-3 w-3 text-slate-400" />
+            </span>
+          </TableHead>
           <TableHead className="text-xs py-2 text-right">Deuda Vencida</TableHead>
         </TableRow>
       </TableHeader>
@@ -150,7 +153,11 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
           <TableHead className="text-xs py-2 text-right">Total pedidos</TableHead>
           <TableHead className="text-xs py-2 w-48">Uso del cupo</TableHead>
           <TableHead className="text-xs py-2 text-right">Deuda actual</TableHead>
-          <TableHead className="text-xs py-2 text-right">Excede por</TableHead>
+          <TableHead className="text-xs py-2 text-right">
+            <span className="inline-flex items-center gap-1 justify-end">
+              Excede por <ArrowDownWideNarrow className="h-3 w-3 text-slate-400" />
+            </span>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -187,7 +194,6 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
                 <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
                   {formatCurrencyFull(cliente.total_pedidos)}
                 </TableCell>
-                {/* Uso del cupo: barra visual */}
                 <TableCell className="py-1.5">
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -209,7 +215,6 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
                 <TableCell className="text-right text-sm tabular-nums py-1.5">
                   {formatCurrencyFull(cliente.total_deuda)}
                 </TableCell>
-                {/* Excede por: valor positivo + badge % */}
                 <TableCell className="text-right py-1.5">
                   <div className="text-sm font-medium tabular-nums text-red-600">
                     {formatCurrencyFull(cliente.excede_por)}

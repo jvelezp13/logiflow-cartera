@@ -30,6 +30,21 @@ Este proyecto comparte el MISMO proyecto Supabase con logiflow-ventas. Ambos usa
 
 Cartera es dueno de las migraciones SQL (supabase/migrations/). Ventas no tiene migraciones propias.
 
+### Ownership de objetos en Supabase
+
+| Objeto | Dueño | Nota |
+|--------|-------|------|
+| Tablas base (cartera, pedidos, maestra_total, clientes_credito) | Sync-Logiflow | Pobladas por jobs diarios |
+| sync_tenants, sync_alertas, sync_credentials, sync_runs | Sync-Logiflow | Infraestructura de sync |
+| vista_pedidos_enriquecida | Sync-Logiflow | **No esta en migraciones locales** — si cambia alla, puede romper aca |
+| vista_cartera_enriquecida | logiflow-cartera | migrations/007 |
+| vista_cliente_resumen | logiflow-cartera | migrations/008, 010 |
+| notas_cliente | logiflow-cartera | migrations/009 |
+| profiles, app_permissions | logiflow-cartera | migrations/002, 005 |
+| RPCs (get_dashboard_kpis, get_envejecimiento, get_ciudades, get_segmentos, get_alertas_completas) | logiflow-cartera | migrations/004, 007, 011 |
+
+**Riesgo**: los tipos TypeScript de `vista_pedidos_enriquecida` estan escritos a mano en `cartera-server.ts`. Si Sync-Logiflow cambia columnas, cartera rompe en runtime sin error de compilacion.
+
 ## Estructura
 
 ```

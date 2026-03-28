@@ -5,7 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { RANGOS_MORA } from "@/lib/severity";
+import { RANGOS_MORA, getSeveridad, type Severidad } from "@/lib/severity";
 
 // --- Tipos ---
 
@@ -101,10 +101,9 @@ export interface PedidoPreFacturacion {
   pedido_total: number | null;
   maxima_mora: number;
   total_vencido: number;
-  severidad: "atencion" | "critico";
+  severidad: Exclude<Severidad, "tolerable">;
   cupo_asignado: number | null;
   total_deuda: number;
-  cupo_disponible: number | null;
 }
 
 // Sanitizar input para evitar inyeccion en filtros PostgREST
@@ -658,14 +657,9 @@ export async function getPedidosPreFacturacion(): Promise<PedidoPreFacturacion[]
     const cliente = clientesMap.get(p.codigo_cliente);
     if (!cliente) continue;
 
-    const pedidoTotal = Number(p.pedido_total || 0);
     const cupoAsignado = cliente.cupo_asignado != null ? Number(cliente.cupo_asignado) : null;
     const totalDeuda = Number(cliente.total_deuda || 0);
-    const cupoDisponible = cupoAsignado != null
-      ? cupoAsignado - totalDeuda - pedidoTotal
-      : null;
 
-    const severidad: "atencion" | "critico" = cliente.maxima_mora > 20 ? "critico" : "atencion";
     pedidos.push({
       num_pedido: p.num_pedido,
       fecha: p.fecha,
@@ -675,10 +669,9 @@ export async function getPedidosPreFacturacion(): Promise<PedidoPreFacturacion[]
       pedido_total: p.pedido_total,
       maxima_mora: cliente.maxima_mora,
       total_vencido: cliente.total_vencido,
-      severidad,
+      severidad: getSeveridad(cliente.maxima_mora) as Exclude<Severidad, "tolerable">,
       cupo_asignado: cupoAsignado,
       total_deuda: totalDeuda,
-      cupo_disponible: cupoDisponible,
     });
   }
 
