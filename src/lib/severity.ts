@@ -43,7 +43,7 @@ export const SEVERIDAD_CONFIG = {
 export function getMoraBadgeStyles(mora: number): { label: string; classes: string } {
   if (mora <= 0) return { label: "Al dia", classes: "bg-slate-100 text-slate-600" };
   const sev = getSeveridad(mora);
-  return { label: `${mora}d`, classes: SEVERIDAD_CONFIG[sev].badge };
+  return { label: `${mora} dias`, classes: SEVERIDAD_CONFIG[sev].badge };
 }
 
 export const SEVERIDADES = [
@@ -63,6 +63,24 @@ export const RANGOS = [
   { value: "61-90", label: "61-90 dias" },
   { value: "90+", label: "90+ dias" },
 ] as const;
+
+type RangoValue = (typeof RANGOS)[number]["value"];
+
+export const RANGOS_MORA: Record<RangoValue, [number, number]> = {
+  al_dia: [-Infinity, 0],
+  "1-5": [1, 5],
+  "6-10": [6, 10],
+  "11-15": [11, 15],
+  "16-20": [16, 20],
+  "21-30": [21, 30],
+  "31-60": [31, 60],
+  "61-90": [61, 90],
+  "90+": [91, Infinity],
+};
+
+export function isValidSeveridad(value: string | undefined): value is Severidad {
+  return value === "tolerable" || value === "atencion" || value === "critico";
+}
 
 export function getCupoBarColor(pct: number): string {
   if (pct > 100) return "bg-red-500";

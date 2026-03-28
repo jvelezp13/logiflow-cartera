@@ -5,6 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
+import { RANGOS_MORA } from "@/lib/severity";
 
 // --- Tipos ---
 
@@ -245,18 +246,6 @@ export async function getPedidosPendientes(
 
 // --- Facturas ---
 
-// Rangos de envejecimiento con sus limites de mora
-const RANGOS_MORA: Record<string, [number, number]> = {
-  "al_dia":  [  -Infinity, 0  ],
-  "1-5":     [  1,         5  ],
-  "6-10":    [  6,        10  ],
-  "11-15":   [ 11,        15  ],
-  "16-20":   [ 16,        20  ],
-  "21-30":   [ 21,        30  ],
-  "31-60":   [ 31,        60  ],
-  "61-90":   [ 61,        90  ],
-  "90+":     [ 91,  Infinity  ],
-};
 
 export async function getFacturasConFiltros(options?: {
   busqueda?: string;
@@ -304,12 +293,12 @@ export async function getFacturasConFiltros(options?: {
   }
 
   // Filtro por rango de envejecimiento
-  if (options?.rango && RANGOS_MORA[options.rango]) {
-    const [min, max] = RANGOS_MORA[options.rango];
+  if (options?.rango && RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA]) {
+    const [min, max] = RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA];
     if (min === -Infinity) {
       query = query.lte("mora", max);
     } else if (max === Infinity) {
-      query = query.gt("mora", 90);
+      query = query.gte("mora", min);
     } else {
       query = query.gte("mora", min).lte("mora", max);
     }
@@ -376,12 +365,12 @@ export async function getClientesConSaldo(options?: {
   }
 
   // Filtro por rango de envejecimiento
-  if (options?.rango && RANGOS_MORA[options.rango]) {
-    const [min, max] = RANGOS_MORA[options.rango];
+  if (options?.rango && RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA]) {
+    const [min, max] = RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA];
     if (min === -Infinity) {
       query = query.lte("maxima_mora", max);
     } else if (max === Infinity) {
-      query = query.gt("maxima_mora", 90);
+      query = query.gte("maxima_mora", min);
     } else {
       query = query.gte("maxima_mora", min).lte("maxima_mora", max);
     }

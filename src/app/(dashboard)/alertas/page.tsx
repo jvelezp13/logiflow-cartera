@@ -181,7 +181,7 @@ function TablaCupoExcedido({ clientes }: { clientes: ClienteCupoAlerta[] }) {
           clientes.map((c) => {
             const badge = getNivelBadge(c.nivel);
             return (
-              <TableRow key={c.codigo_cliente} className="hover:bg-slate-50">
+              <TableRow key={c.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
                   <Link
                     href={`/clientes/${c.codigo_cliente}`}
@@ -248,7 +248,7 @@ function TablaCupoOcioso({ clientes }: { clientes: ClienteCupoOcioso[] }) {
           <MensajeVacio texto="No hay clientes con cupo subutilizado (<50%)" colSpan={5} />
         ) : (
           clientes.map((c) => (
-            <TableRow key={c.codigo_cliente} className="hover:bg-slate-50">
+            <TableRow key={c.codigo_cliente} className="hover:bg-slate-100/60">
               <TableCell className="py-1.5">
                 <Link
                   href={`/clientes/${c.codigo_cliente}`}
@@ -310,7 +310,7 @@ function TablaInactivos({ clientes }: { clientes: ClienteInactivo[] }) {
           clientes.map((c) => {
             const diasBadge = getDiasBadge(c.dias_sin_pedido);
             return (
-              <TableRow key={c.codigo_cliente} className="hover:bg-slate-50">
+              <TableRow key={c.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
                   <Link
                     href={`/clientes/${c.codigo_cliente}`}
@@ -365,7 +365,7 @@ function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
           novedades.map((n) => {
             const badge = getTipoBadge(n.tipo);
             return (
-              <TableRow key={n.id} className="hover:bg-slate-50">
+              <TableRow key={n.id} className="hover:bg-slate-100/60">
                 <TableCell className="text-xs text-slate-500 tabular-nums py-1.5">
                   {formatFechaCorta(n.created_at)}
                 </TableCell>

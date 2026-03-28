@@ -97,7 +97,7 @@ function TablaMora({ pedidos }: { pedidos: PedidoPreFacturacion[] }) {
             const severidadBadge = { label: sevCfg.label, classes: sevCfg.badge };
             const moraBadge = getMoraBadgeStyles(pedido.maxima_mora);
             return (
-              <TableRow key={pedido.num_pedido} className="hover:bg-slate-50">
+              <TableRow key={pedido.num_pedido} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
                   <div className="text-sm font-medium">{pedido.num_pedido}</div>
                   <div className="text-xs text-slate-400">{formatFechaCorta(pedido.fecha)}</div>
@@ -169,7 +169,7 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
             const totalPct = ((cliente.total_deuda + cliente.total_pedidos) / cliente.cupo_asignado) * 100;
 
             return (
-              <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-50">
+              <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
                   <Link
                     href={`/clientes/${cliente.codigo_cliente}`}

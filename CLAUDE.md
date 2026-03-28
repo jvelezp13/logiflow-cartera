@@ -59,7 +59,7 @@ src/
     ├── queries/
     │   ├── cartera-server.ts   # Tipos + queries server-side (usa auth + cookie castigada)
     │   └── alertas-server.ts   # Queries alertas (cupo excedido/ocioso, inactivos, novedades)
-    ├── severity.ts             # getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG, SEVERIDADES, RANGOS
+    ├── severity.ts             # getSeveridad, getMoraBadgeStyles, isValidSeveridad, SEVERIDAD_CONFIG, SEVERIDADES, RANGOS, RANGOS_MORA
     ├── navigation.ts           # getNavItems, navigation arrays (sidebar + mobile)
     ├── format.ts               # formatCurrencyShort, formatCurrencyFull
     ├── url.ts                  # buildPageUrl (paginacion con filtros)

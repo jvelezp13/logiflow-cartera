@@ -22,7 +22,7 @@ import {
 import type { ClienteEnriquecido, ClienteCredito } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { getSeveridad, SEVERIDAD_CONFIG } from "@/lib/severity";
+import { getSeveridad, SEVERIDAD_CONFIG, isValidSeveridad } from "@/lib/severity";
 import { buildPageUrl } from "@/lib/url";
 import { FiltrosCartera } from "@/components/filtros-cartera";
 import { Paginacion } from "@/components/paginacion";
@@ -60,7 +60,7 @@ export default async function ClientesPage({
   // Datos completos solo del modo activo
   const busqueda = params.q || "";
   const ciudad = params.ciudad || undefined;
-  const severidad = (params.severidad as "tolerable" | "atencion" | "critico") || undefined;
+  const severidad = isValidSeveridad(params.severidad) ? params.severidad : undefined;
   const rango = params.rango || undefined;
   const page = Math.max(1, Number(params.page) || 1);
 
@@ -173,7 +173,7 @@ function TablaConSaldo({ clientes, clientesConNotas }: { clientes: ClienteEnriqu
               clientes.map((cliente) => {
                 const sevConfig = SEVERIDAD_CONFIG[getSeveridad(cliente.maxima_mora)];
                 return (
-                  <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-50">
+                  <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-100/60">
                     <TableCell className="py-1.5">
                       <div className="flex items-center gap-1.5">
                         <Link

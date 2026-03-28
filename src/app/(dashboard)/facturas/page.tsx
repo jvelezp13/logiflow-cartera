@@ -13,10 +13,11 @@ import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import { getFacturasConFiltros, getCiudades } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { getMoraBadgeStyles } from "@/lib/severity";
+import { getMoraBadgeStyles, isValidSeveridad } from "@/lib/severity";
 import { buildPageUrl } from "@/lib/url";
 import { FiltrosCartera } from "@/components/filtros-cartera";
 import { Paginacion } from "@/components/paginacion";
+import { ArrowDownWideNarrow } from "lucide-react";
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 50;
@@ -29,7 +30,7 @@ export default async function FacturasPage({
   const params = await searchParams;
   const busqueda = params.q || "";
   const ciudad = params.ciudad || undefined;
-  const severidad = (params.severidad as "tolerable" | "atencion" | "critico") || undefined;
+  const severidad = isValidSeveridad(params.severidad) ? params.severidad : undefined;
   const rango = params.rango || undefined;
   const page = Math.max(1, Number(params.page) || 1);
 
@@ -79,7 +80,11 @@ export default async function FacturasPage({
                   <TableHead className="text-xs py-2">Cliente</TableHead>
                   <TableHead className="text-xs py-2">Vendedor</TableHead>
                   <TableHead className="text-xs py-2">F. Vencimiento</TableHead>
-                  <TableHead className="text-xs py-2 text-center">Mora</TableHead>
+                  <TableHead className="text-xs py-2 text-center">
+                    <span className="inline-flex items-center gap-1">
+                      Mora <ArrowDownWideNarrow className="h-3 w-3 text-slate-400" />
+                    </span>
+                  </TableHead>
                   <TableHead className="text-xs py-2 text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -94,7 +99,7 @@ export default async function FacturasPage({
                   facturas.map((factura) => {
                     const badge = getMoraBadgeStyles(factura.mora);
                     return (
-                      <TableRow key={factura.no_factura} className="hover:bg-slate-50">
+                      <TableRow key={factura.no_factura} className="hover:bg-slate-100/60">
                         <TableCell className="py-1.5 text-sm font-medium">
                           {factura.no_factura}
                         </TableCell>
