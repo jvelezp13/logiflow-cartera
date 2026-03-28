@@ -8,20 +8,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
+import { formatCurrencyFull, formatCurrencyShort } from "@/lib/format";
 import {
-  getPedidosPreFacturacion,
+  getClientesMoraConPedidos,
   getClientesCupoExcedido,
 } from "@/lib/queries/cartera-server";
 import type {
-  PedidoPreFacturacion,
+  ClientePreFacturacionMora,
   ClienteCupoExcedido,
 } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
+import { getNotasIndicador } from "@/lib/queries/notas-server";
 import { PreFacturacionFiltros } from "@/components/pre-facturacion/pre-facturacion-filtros";
-import { getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
+import { CopiarResumen } from "@/components/pre-facturacion/copiar-resumen";
+import { SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
 import { ArrowDownWideNarrow } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import Link from "next/link";
 
 export default async function PreFacturacionPage({
@@ -32,15 +35,26 @@ export default async function PreFacturacionPage({
   const params = await searchParams;
   const modo = params.modo === "cupo" ? "cupo" : "mora";
 
-  const [profile, incluirCastigada, pedidosMora, clientesCupo] = await Promise.all([
+  const [profile, incluirCastigada, clientesMora, clientesCupo] = await Promise.all([
     getUserProfile(),
     getIncluirCastigada(),
-    modo === "mora" ? getPedidosPreFacturacion() : Promise.resolve([]),
+    modo === "mora" ? getClientesMoraConPedidos() : Promise.resolve([]),
     modo === "cupo" ? getClientesCupoExcedido() : Promise.resolve([]),
   ]);
 
-  const total = pedidosMora.length + clientesCupo.length;
-  const etiquetaConteo = modo === "mora" ? "pedidos" : "clientes";
+  // Datos para KPI y notas
+  const clientesActivos = modo === "mora" ? clientesMora : clientesCupo;
+  const codigosClientes = clientesActivos.map((c) => c.codigo_cliente);
+  const notasIndicador = await getNotasIndicador(codigosClientes);
+
+  const totalClientes = clientesActivos.length;
+  const totalPedidos = clientesActivos.reduce((acc, c) => acc + c.cantidad_pedidos, 0);
+  const montoRiesgo = modo === "mora"
+    ? clientesMora.reduce((acc, c) => acc + c.total_vencido, 0)
+    : clientesCupo.reduce((acc, c) => acc + c.excede_por, 0);
+
+  const etiquetaConteo = modo === "mora" ? "clientes" : "clientes";
+  const resumenWhatsApp = generarResumenWhatsApp(modo, clientesMora, clientesCupo);
 
   return (
     <>
@@ -52,14 +66,30 @@ export default async function PreFacturacionPage({
       />
 
       <div className="p-6 space-y-4 bg-slate-50 min-h-screen">
-        <PreFacturacionFiltros total={total} etiquetaConteo={etiquetaConteo} />
+        <div className="flex items-center justify-between">
+          <PreFacturacionFiltros total={totalClientes} etiquetaConteo={etiquetaConteo} />
+          {totalClientes > 0 && <CopiarResumen texto={resumenWhatsApp} />}
+        </div>
+
+        {totalClientes > 0 && (
+          <div className="text-sm text-slate-600">
+            <span className="font-medium">{totalClientes} clientes</span>
+            {" · "}
+            <span className="tabular-nums">{totalPedidos} pedidos</span>
+            {" · "}
+            <span className="font-medium tabular-nums">
+              {modo === "mora" ? "Vencido: " : "Exceso: "}
+              {formatCurrencyShort(montoRiesgo)}
+            </span>
+          </div>
+        )}
 
         <Card>
           <CardContent className="p-0">
             {modo === "mora" ? (
-              <TablaMora pedidos={pedidosMora} />
+              <TablaMora clientes={clientesMora} notasIndicador={notasIndicador} />
             ) : (
-              <TablaCupo clientes={clientesCupo} />
+              <TablaCupo clientes={clientesCupo} notasIndicador={notasIndicador} />
             )}
           </CardContent>
         </Card>
@@ -68,70 +98,89 @@ export default async function PreFacturacionPage({
   );
 }
 
-// --- Tabla modo MORA ---
-function TablaMora({ pedidos }: { pedidos: PedidoPreFacturacion[] }) {
+// --- Indicador de notas ---
+function NotasBadge({ indicador }: { indicador: { total: number; recientes: number } | undefined }) {
+  if (!indicador || indicador.total === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-0.5 text-slate-400" title={`${indicador.total} notas (${indicador.recientes} recientes)`}>
+      <MessageSquare className="h-3.5 w-3.5" />
+      {indicador.recientes > 0 && (
+        <span className="text-[10px] font-medium tabular-nums">{indicador.recientes}</span>
+      )}
+    </span>
+  );
+}
+
+// --- Tabla modo MORA (agrupada por cliente) ---
+function TablaMora({
+  clientes,
+  notasIndicador,
+}: {
+  clientes: ClientePreFacturacionMora[];
+  notasIndicador: Map<string, { total: number; recientes: number }>;
+}) {
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="text-xs py-2">Pedido</TableHead>
           <TableHead className="text-xs py-2">Cliente</TableHead>
-          <TableHead className="text-xs py-2">Asesor</TableHead>
-          <TableHead className="text-xs py-2 text-right">Valor Pedido</TableHead>
+          <TableHead className="text-xs py-2 text-center">Pedidos</TableHead>
+          <TableHead className="text-xs py-2 text-right">Total pedidos</TableHead>
           <TableHead className="text-xs py-2 text-center">Severidad</TableHead>
           <TableHead className="text-xs py-2 text-center">
             <span className="inline-flex items-center gap-1">
               Mora <ArrowDownWideNarrow className="h-3 w-3 text-slate-400" />
             </span>
           </TableHead>
-          <TableHead className="text-xs py-2 text-right">Deuda Vencida</TableHead>
+          <TableHead className="text-xs py-2 text-right">Deuda vencida</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {pedidos.length === 0 ? (
+        {clientes.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-8 text-slate-500">
-              No hay pedidos de clientes con mora {`>`} 5 dias (ultimos 7 dias)
+            <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+              No hay pedidos pendientes de clientes con mora &gt; 5 dias
             </TableCell>
           </TableRow>
         ) : (
-          pedidos.map((pedido) => {
-            const sevCfg = SEVERIDAD_CONFIG[pedido.severidad];
-            const severidadBadge = { label: sevCfg.label, classes: sevCfg.badge };
-            const moraBadge = getMoraBadgeStyles(pedido.maxima_mora);
+          clientes.map((cliente) => {
+            const sevCfg = SEVERIDAD_CONFIG[cliente.severidad];
             return (
-              <TableRow key={pedido.num_pedido} className="hover:bg-slate-100/60">
+              <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
-                  <div className="text-sm font-medium">{pedido.num_pedido}</div>
-                  <div className="text-xs text-slate-400">{formatFechaCorta(pedido.fecha)}</div>
-                </TableCell>
-                <TableCell className="py-1.5">
-                  <Link
-                    href={`/clientes/${pedido.codigo_cliente}`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    {pedido.nombre_negocio || pedido.codigo_cliente}
-                  </Link>
-                  <div className="text-xs text-slate-400">{pedido.codigo_cliente}</div>
-                </TableCell>
-                <TableCell className="text-xs text-slate-500 py-1.5">
-                  {pedido.nombre_asesor || "-"}
-                </TableCell>
-                <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
-                  {formatCurrencyFull(Number(pedido.pedido_total || 0))}
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/clientes/${cliente.codigo_cliente}`}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      {cliente.nombre_negocio || cliente.codigo_cliente}
+                    </Link>
+                    <NotasBadge indicador={notasIndicador.get(cliente.codigo_cliente)} />
+                  </div>
+                  <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
                 </TableCell>
                 <TableCell className="text-center py-1.5">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severidadBadge.classes}`}>
-                    {severidadBadge.label}
+                  <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-xs font-medium tabular-nums">
+                    {cliente.cantidad_pedidos}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
+                  {formatCurrencyFull(cliente.total_pedidos)}
+                </TableCell>
+                <TableCell className="text-center py-1.5">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${sevCfg.badge}`}>
+                    {sevCfg.label}
                   </span>
                 </TableCell>
                 <TableCell className="text-center py-1.5">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${moraBadge.classes}`}>
-                    {moraBadge.label}
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    cliente.maxima_mora > 20 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
+                  }`}>
+                    {cliente.maxima_mora} dias
                   </span>
                 </TableCell>
                 <TableCell className="text-right text-sm font-medium tabular-nums py-1.5 text-red-600">
-                  {formatCurrencyFull(Number(pedido.total_vencido || 0))}
+                  {formatCurrencyFull(cliente.total_vencido)}
                 </TableCell>
               </TableRow>
             );
@@ -143,7 +192,13 @@ function TablaMora({ pedidos }: { pedidos: PedidoPreFacturacion[] }) {
 }
 
 // --- Tabla modo CUPO (agrupado por cliente) ---
-function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
+function TablaCupo({
+  clientes,
+  notasIndicador,
+}: {
+  clientes: ClienteCupoExcedido[];
+  notasIndicador: Map<string, { total: number; recientes: number }>;
+}) {
   return (
     <Table>
       <TableHeader>
@@ -164,26 +219,26 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
         {clientes.length === 0 ? (
           <TableRow>
             <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-              No hay clientes que excedan su cupo con pedidos pendientes (ultimos 7 dias)
+              No hay clientes que excedan su cupo con pedidos pendientes
             </TableCell>
           </TableRow>
         ) : (
           clientes.map((cliente) => {
-            // % uso actual (deuda / cupo, ANTES de los pedidos)
             const usoActualPct = (cliente.total_deuda / cliente.cupo_asignado) * 100;
-
-            // % total si se facturan todos los pedidos
             const totalPct = ((cliente.total_deuda + cliente.total_pedidos) / cliente.cupo_asignado) * 100;
 
             return (
               <TableRow key={cliente.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
-                  <Link
-                    href={`/clientes/${cliente.codigo_cliente}`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    {cliente.nombre_negocio || cliente.codigo_cliente}
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/clientes/${cliente.codigo_cliente}`}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      {cliente.nombre_negocio || cliente.codigo_cliente}
+                    </Link>
+                    <NotasBadge indicador={notasIndicador.get(cliente.codigo_cliente)} />
+                  </div>
                   <div className="text-xs text-slate-400">{cliente.codigo_cliente}</div>
                 </TableCell>
                 <TableCell className="text-center py-1.5">
@@ -230,4 +285,40 @@ function TablaCupo({ clientes }: { clientes: ClienteCupoExcedido[] }) {
       </TableBody>
     </Table>
   );
+}
+
+// --- Generador de texto para WhatsApp ---
+function generarResumenWhatsApp(
+  modo: "mora" | "cupo",
+  clientesMora: ClientePreFacturacionMora[],
+  clientesCupo: ClienteCupoExcedido[],
+): string {
+  const hoy = new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const titulo = modo === "mora" ? "Mora" : "Cupo";
+  const lineas: string[] = [`*Pre-facturación — ${titulo} — ${hoy}*`, ""];
+
+  if (modo === "mora") {
+    for (const c of clientesMora) {
+      const nombre = c.nombre_negocio || c.codigo_cliente;
+      lineas.push(
+        `${c.codigo_cliente} — ${nombre} — ${c.cantidad_pedidos} pedido${c.cantidad_pedidos > 1 ? "s" : ""} — Mora ${c.maxima_mora} dias — Vencido ${formatCurrencyShort(c.total_vencido)}`
+      );
+    }
+    const totalPedidos = clientesMora.reduce((acc, c) => acc + c.cantidad_pedidos, 0);
+    const totalVencido = clientesMora.reduce((acc, c) => acc + c.total_vencido, 0);
+    lineas.push("", `${clientesMora.length} clientes | ${totalPedidos} pedidos | Vencido: ${formatCurrencyShort(totalVencido)}`);
+  } else {
+    for (const c of clientesCupo) {
+      const nombre = c.nombre_negocio || c.codigo_cliente;
+      const pct = ((c.total_deuda + c.total_pedidos) / c.cupo_asignado * 100).toFixed(0);
+      lineas.push(
+        `${c.codigo_cliente} — ${nombre} — ${c.cantidad_pedidos} pedido${c.cantidad_pedidos > 1 ? "s" : ""} — Excede ${formatCurrencyShort(c.excede_por)} (${pct}%)`
+      );
+    }
+    const totalPedidos = clientesCupo.reduce((acc, c) => acc + c.cantidad_pedidos, 0);
+    const totalExceso = clientesCupo.reduce((acc, c) => acc + c.excede_por, 0);
+    lineas.push("", `${clientesCupo.length} clientes | ${totalPedidos} pedidos | Exceso: ${formatCurrencyShort(totalExceso)}`);
+  }
+
+  return lineas.join("\n");
 }

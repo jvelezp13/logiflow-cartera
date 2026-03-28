@@ -38,6 +38,42 @@ export async function getClientesConNotas(
 }
 
 
+/**
+ * Indicador de notas para listas: total y recientes (ultimos 30 dias).
+ * - total > 0 && recientes > 0 → icono con numero (gestión activa)
+ * - total > 0 && recientes === 0 → icono sin numero (solo historial)
+ * - total === 0 → sin icono
+ */
+export async function getNotasIndicador(
+  codigosClientes: string[],
+): Promise<Map<string, { total: number; recientes: number }>> {
+  if (codigosClientes.length === 0) return new Map();
+
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("notas_cliente")
+    .select("codigo_cliente, created_at")
+    .eq("tenant_id", tenantId)
+    .in("codigo_cliente", codigosClientes);
+
+  const treintaDiasAtras = new Date();
+  treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30);
+
+  const result = new Map<string, { total: number; recientes: number }>();
+  for (const row of data || []) {
+    const entry = result.get(row.codigo_cliente) || { total: 0, recientes: 0 };
+    entry.total++;
+    if (row.created_at && new Date(row.created_at) >= treintaDiasAtras) {
+      entry.recientes++;
+    }
+    result.set(row.codigo_cliente, entry);
+  }
+
+  return result;
+}
+
 export async function getNotasCliente(
   codigoCliente: string,
 ): Promise<NotaCliente[]> {
