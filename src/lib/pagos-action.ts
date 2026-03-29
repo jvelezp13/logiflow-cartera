@@ -83,6 +83,14 @@ export async function extraerDatos(
     }
 
     const { data, raw } = await extraerDatosSoporte(objectKey);
+    if (!data.extraccion_exitosa) {
+      return {
+        error:
+          data.observaciones ||
+          "No se pudieron extraer datos del soporte. Ingresalos manualmente.",
+        raw,
+      };
+    }
     return { data, raw };
   } catch (e) {
     logError("extraerDatos", e);

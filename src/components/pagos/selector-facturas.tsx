@@ -143,17 +143,22 @@ export function SelectorFacturas({
                   <td className="p-2 text-right">
                     {isSelected ? (
                       <Input
-                        type="number"
-                        value={sel!.valor_aplicado}
-                        onChange={(e) =>
+                        type="text"
+                        inputMode="numeric"
+                        value={
+                          sel!.valor_aplicado
+                            ? sel!.valor_aplicado.toLocaleString("es-CO")
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "");
+                          const valor = parseInt(raw, 10) || 0;
                           updateValorAplicado(
                             f.no_factura,
-                            parseFloat(e.target.value) || 0
-                          )
-                        }
+                            Math.min(valor, f.total)
+                          );
+                        }}
                         className="h-7 text-xs text-right w-28 ml-auto"
-                        min={1}
-                        max={f.total}
                       />
                     ) : (
                       <span className="text-xs text-slate-300">-</span>

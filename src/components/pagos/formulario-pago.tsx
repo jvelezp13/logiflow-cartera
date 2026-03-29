@@ -17,7 +17,7 @@ import { comprimirImagen } from "@/lib/image-compression";
 import { obtenerUrlSubida, extraerDatos, crearPago } from "@/lib/pagos-action";
 import { SelectorFacturas } from "@/components/pagos/selector-facturas";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
-import type { DatosSoporte } from "@/lib/ai-extraction";
+import { type DatosSoporte, MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
 
 // --- State Machine ---
 
@@ -105,14 +105,14 @@ function reducer(state: FormState, action: FormAction): FormState {
         aiData: action.data,
         aiRaw: action.raw,
         fechaConsignacion:
-          action.data.fecha || state.fechaConsignacion,
+          action.data.datos.fecha_consignacion || state.fechaConsignacion,
         montoTotal:
-          action.data.monto?.toString() || state.montoTotal,
-        vouchers: action.data.referencia
-          ? [action.data.referencia]
+          action.data.datos.valor_pagado?.toString() || state.montoTotal,
+        vouchers: action.data.datos.numero_voucher
+          ? [action.data.datos.numero_voucher]
           : state.vouchers,
         medioPago:
-          action.data.tipo_operacion || state.medioPago,
+          action.data.datos.medio_de_pago || state.medioPago,
       };
     case "EXTRACTION_FAILED":
       return { ...state, step: "reviewing", error: action.error };
@@ -329,12 +329,31 @@ export function FormularioPago({
       )}
 
       {/* AI badge */}
-      {state.aiData && (
-        <div className="flex items-center gap-2 bg-blue-50 text-blue-800 text-xs px-3 py-2 rounded-md border border-blue-200">
-          <Check className="h-3 w-3" />
-          Datos pre-llenados por IA — revisa y ajusta si es necesario
-        </div>
-      )}
+      {state.aiData && (() => {
+        const nivel = state.aiData.confianza.nivel;
+        const Icon = nivel === "alto" ? Check : AlertCircle;
+        return (
+          <div
+            className={`flex items-center gap-2 text-xs px-3 py-2 rounded-md border ${
+              nivel === "alto"
+                ? "bg-blue-50 text-blue-800 border-blue-200"
+                : nivel === "medio"
+                  ? "bg-amber-50 text-amber-800 border-amber-200"
+                  : "bg-red-50 text-red-800 border-red-200"
+            }`}
+          >
+            <Icon className="h-3 w-3 shrink-0" />
+            <span>
+              {nivel === "alto"
+                ? "Datos extraidos por IA — revisa y ajusta si es necesario"
+                : `Confianza ${nivel}: ${state.aiData.confianza.notas || "revisa los datos con cuidado"}`}
+              {state.aiData.observaciones && (
+                <> · {state.aiData.observaciones}</>
+              )}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Form fields */}
       <div className="grid grid-cols-2 gap-3">
@@ -401,11 +420,11 @@ export function FormularioPago({
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="transferencia">Transferencia</SelectItem>
-              <SelectItem value="datafono">Datafono</SelectItem>
-              <SelectItem value="pse">PSE</SelectItem>
-              <SelectItem value="consignacion">Consignacion</SelectItem>
-              <SelectItem value="otro">Otro</SelectItem>
+              {MEDIOS_DE_PAGO.map((medio) => (
+                <SelectItem key={medio} value={medio}>
+                  {medio}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
