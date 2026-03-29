@@ -1,13 +1,12 @@
 export function buildPageUrl(
   rutaBase: string,
   targetPage: number,
-  filters: { busqueda?: string; ciudad?: string; severidad?: string; rango?: string },
+  filters: Record<string, string | undefined>,
 ): string {
   const p = new URLSearchParams();
-  if (filters.busqueda) p.set("q", filters.busqueda);
-  if (filters.ciudad) p.set("ciudad", filters.ciudad);
-  if (filters.severidad) p.set("severidad", filters.severidad);
-  if (filters.rango) p.set("rango", filters.rango);
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) p.set(key === "busqueda" ? "q" : key, value);
+  }
   p.set("page", String(targetPage));
   return `${rutaBase}?${p.toString()}`;
 }

@@ -4,6 +4,7 @@ import {
   FileText,
   AlertTriangle,
   Bell,
+  Banknote,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -17,10 +18,14 @@ export const navigation: NavItem[] = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Clientes", href: "/clientes", icon: Users },
   { name: "Facturas", href: "/facturas", icon: FileText },
+  { name: "Pagos", href: "/pagos", icon: Banknote },
   { name: "Pre-facturacion", href: "/pre-facturacion", icon: AlertTriangle },
   { name: "Alertas", href: "/alertas", icon: Bell },
 ];
 
 export function getNavItems(): NavItem[] {
+  if (process.env.ENABLE_PAGOS === "false") {
+    return navigation.filter((item) => item.href !== "/pagos");
+  }
   return navigation;
 }

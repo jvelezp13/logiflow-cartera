@@ -1,0 +1,307 @@
+import { createClient } from "@/lib/supabase/server";
+import { getTenantId } from "@/lib/auth/get-tenant";
+import { generarUrlLectura } from "@/lib/r2";
+import { logError } from "@/lib/logger";
+
+// --- Tipos ---
+
+export interface PagoFactura {
+  id: string;
+  no_factura: string;
+  valor_factura: number | null;
+  valor_aplicado: number;
+}
+
+export interface PagoResumen {
+  id: string;
+  fecha_consignacion: string;
+  monto_total: number;
+  medio_pago: string | null;
+  vouchers: string[];
+  numero_recaudo: number | null;
+  numero_recibo: number | null;
+  estado: string;
+  soporte_key: string | null;
+  created_at: string | null;
+  created_by_name: string | null;
+  codigo_cliente: string | null;
+  facturas: PagoFactura[];
+}
+
+export interface PagoDetalle extends PagoResumen {
+  codigo_cliente: string;
+  observaciones: string | null;
+  nota_credito: string | null;
+  valor_nota_credito: number | null;
+  soporte_url_firmada: string | null;
+  ai_extraction: unknown;
+  importado_historico: boolean;
+}
+
+export interface PagosFilters {
+  busqueda?: string;
+  estado?: string;
+  desde?: string;
+  hasta?: string;
+}
+
+export interface FacturaAbierta {
+  no_factura: string;
+  fecha_vencimiento: string | null;
+  mora: number;
+  total: number;
+}
+
+// --- Queries ---
+
+function sanitizeSearchInput(input: string): string {
+  return input.replace(/[%_.*,()\\\n\r]/g, "");
+}
+
+/**
+ * Pagos de un cliente con sus facturas vinculadas.
+ * Para la seccion de pagos en detalle de cliente.
+ */
+export async function getPagosCliente(
+  codigoCliente: string,
+  limit = 10
+): Promise<PagoResumen[]> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("pagos")
+    .select(
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, estado, soporte_key, created_at, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)"
+    )
+    .eq("tenant_id", tenantId)
+    .eq("codigo_cliente", codigoCliente)
+    .order("fecha_consignacion", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return (data || []).map((row) => {
+    const profiles = row.profiles as
+      | { full_name: string | null }[]
+      | { full_name: string | null }
+      | null;
+    const profile = Array.isArray(profiles) ? profiles[0] : profiles;
+
+    return {
+      id: row.id,
+      fecha_consignacion: row.fecha_consignacion,
+      monto_total: Number(row.monto_total),
+      medio_pago: row.medio_pago,
+      vouchers: row.vouchers || [],
+      numero_recaudo: row.numero_recaudo,
+      numero_recibo: row.numero_recibo,
+      estado: row.estado,
+      soporte_key: row.soporte_key,
+      created_at: row.created_at,
+      created_by_name: profile?.full_name ?? null,
+      codigo_cliente: null,
+      facturas: (
+        (row.pago_facturas as PagoFactura[] | null) || []
+      ).map((f) => ({
+        id: f.id,
+        no_factura: f.no_factura,
+        valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
+        valor_aplicado: Number(f.valor_aplicado),
+      })),
+    };
+  });
+}
+
+/**
+ * Lista paginada de pagos con filtros.
+ * Para la pagina dedicada /pagos.
+ */
+export async function getPagosPaginados(
+  page: number,
+  filters: PagosFilters
+): Promise<{ pagos: PagoResumen[]; total: number }> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+  const perPage = 20;
+  const offset = (page - 1) * perPage;
+
+  let query = supabase
+    .from("pagos")
+    .select(
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, estado, soporte_key, created_at, codigo_cliente, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
+      { count: "exact" }
+    )
+    .eq("tenant_id", tenantId);
+
+  if (filters.busqueda) {
+    const sanitized = sanitizeSearchInput(filters.busqueda);
+    if (sanitized) {
+      query = query.ilike("codigo_cliente", `%${sanitized}%`);
+    }
+  }
+
+  if (filters.estado === "pendiente") {
+    query = query.eq("estado", "registrado");
+  } else if (filters.estado === "verificado") {
+    query = query.eq("estado", "verificado");
+  }
+
+  if (filters.desde) {
+    query = query.gte("fecha_consignacion", filters.desde);
+  }
+  if (filters.hasta) {
+    query = query.lte("fecha_consignacion", filters.hasta);
+  }
+
+  const { data, error, count } = await query
+    .order("fecha_consignacion", { ascending: false })
+    .range(offset, offset + perPage - 1);
+
+  if (error) throw error;
+
+  const pagos: PagoResumen[] = (data || []).map((row) => {
+    const profiles = row.profiles as
+      | { full_name: string | null }[]
+      | { full_name: string | null }
+      | null;
+    const profile = Array.isArray(profiles) ? profiles[0] : profiles;
+
+    return {
+      id: row.id,
+      fecha_consignacion: row.fecha_consignacion,
+      monto_total: Number(row.monto_total),
+      medio_pago: row.medio_pago,
+      vouchers: row.vouchers || [],
+      numero_recaudo: row.numero_recaudo,
+      numero_recibo: row.numero_recibo,
+      estado: row.estado,
+      soporte_key: row.soporte_key,
+      created_at: row.created_at,
+      created_by_name: profile?.full_name ?? null,
+      codigo_cliente: row.codigo_cliente,
+      facturas: (
+        (row.pago_facturas as PagoFactura[] | null) || []
+      ).map((f) => ({
+        id: f.id,
+        no_factura: f.no_factura,
+        valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
+        valor_aplicado: Number(f.valor_aplicado),
+      })),
+    };
+  });
+
+  return { pagos, total: count || 0 };
+}
+
+/**
+ * Detalle completo de un pago con URL firmada del soporte.
+ */
+export async function getPagoDetalle(
+  pagoId: string
+): Promise<PagoDetalle | null> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("pagos")
+    .select(
+      "*, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)"
+    )
+    .eq("tenant_id", tenantId)
+    .eq("id", pagoId)
+    .single();
+
+  if (error || !data) return null;
+
+  const profiles = data.profiles as
+    | { full_name: string | null }[]
+    | { full_name: string | null }
+    | null;
+  const profile = Array.isArray(profiles) ? profiles[0] : profiles;
+
+  let soporteUrlFirmada: string | null = null;
+  if (data.soporte_key) {
+    try {
+      soporteUrlFirmada = await generarUrlLectura(data.soporte_key);
+    } catch (e) {
+      logError("getPagoDetalle:generarUrlLectura", e);
+    }
+  }
+
+  return {
+    id: data.id,
+    codigo_cliente: data.codigo_cliente,
+    fecha_consignacion: data.fecha_consignacion,
+    monto_total: Number(data.monto_total),
+    medio_pago: data.medio_pago,
+    vouchers: data.vouchers || [],
+    numero_recaudo: data.numero_recaudo,
+    numero_recibo: data.numero_recibo,
+    observaciones: data.observaciones,
+    nota_credito: data.nota_credito,
+    valor_nota_credito: data.valor_nota_credito
+      ? Number(data.valor_nota_credito)
+      : null,
+    estado: data.estado,
+    soporte_key: data.soporte_key,
+    soporte_url_firmada: soporteUrlFirmada,
+    ai_extraction: data.ai_extraction,
+    importado_historico: data.importado_historico,
+    created_at: data.created_at,
+    created_by_name: profile?.full_name ?? null,
+    facturas: (
+      (data.pago_facturas as PagoFactura[] | null) || []
+    ).map((f) => ({
+      id: f.id,
+      no_factura: f.no_factura,
+      valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
+      valor_aplicado: Number(f.valor_aplicado),
+    })),
+  };
+}
+
+/**
+ * Count de pagos sin codigos CRM completos (para KPI y badge).
+ */
+export async function getPagosSinCRM(): Promise<number> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { count, error } = await supabase
+    .from("pagos")
+    .select("*", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("estado", "registrado");
+
+  if (error) throw error;
+  return count || 0;
+}
+
+/**
+ * Facturas abiertas de un cliente para el selector de match.
+ * Ordenadas por mora descendente (las mas vencidas primero).
+ */
+export async function getFacturasAbiertas(
+  codigoCliente: string
+): Promise<FacturaAbierta[]> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("vista_cartera_enriquecida")
+    .select("no_factura, fecha_vencimiento, mora, total")
+    .eq("tenant_id", tenantId)
+    .eq("codigo_cliente", codigoCliente)
+    .gt("total", 0)
+    .order("mora", { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((f) => ({
+    no_factura: f.no_factura,
+    fecha_vencimiento: f.fecha_vencimiento,
+    mora: Number(f.mora),
+    total: Number(f.total),
+  }));
+}

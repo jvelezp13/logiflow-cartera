@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { getDetalleCliente } from "@/lib/queries/cartera-server";
 import { getNotasCliente } from "@/lib/queries/notas-server";
+import { getPagosCliente, getFacturasAbiertas } from "@/lib/queries/pagos-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { formatCurrencyFull, formatFechaLarga } from "@/lib/format";
@@ -18,6 +19,8 @@ import { notFound } from "next/navigation";
 import { getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
 import { BotonVolver } from "@/components/boton-volver";
 import { NotasTimeline } from "@/components/notas/notas-timeline";
+import { PagosTimeline } from "@/components/pagos/pagos-timeline";
+import { RegistrarPagoSheet } from "@/components/pagos/registrar-pago-sheet";
 
 export default async function DetalleClientePage({
   params,
@@ -27,8 +30,13 @@ export default async function DetalleClientePage({
   const { codigo } = await params;
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
-  const [{ info, facturas: todasFacturas, pedidos }, notas] =
-    await Promise.all([getDetalleCliente(codigo), getNotasCliente(codigo)]);
+  const [{ info, facturas: todasFacturas, pedidos }, notas, pagos, facturasAbiertas] =
+    await Promise.all([
+      getDetalleCliente(codigo),
+      getNotasCliente(codigo),
+      getPagosCliente(codigo),
+      getFacturasAbiertas(codigo),
+    ]);
 
   if (!info) {
     notFound();
@@ -302,6 +310,22 @@ export default async function DetalleClientePage({
             </Table>
           </CardContent>
         </Card>
+        <div className="space-y-2">
+          {(profile.role === "admin" || profile.role === "super_admin") && (
+            <div className="flex justify-end">
+              <RegistrarPagoSheet
+                codigoCliente={codigo}
+                facturas={facturasAbiertas}
+              />
+            </div>
+          )}
+          <PagosTimeline
+            pagos={pagos}
+            codigoCliente={codigo}
+            userRole={profile.role}
+          />
+        </div>
+
         <NotasTimeline
           notas={notas}
           codigoCliente={codigo}
