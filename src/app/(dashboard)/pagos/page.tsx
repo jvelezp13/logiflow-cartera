@@ -74,11 +74,11 @@ export default async function PagosPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs py-2 w-[80px]">Ref</TableHead>
-                  <TableHead className="text-xs py-2">Fecha / Registrado</TableHead>
+                  <TableHead className="text-xs py-2 w-[80px]">Recibo</TableHead>
+                  <TableHead className="text-xs py-2">Registrado</TableHead>
                   <TableHead className="text-xs py-2">Cliente</TableHead>
                   <TableHead className="text-xs py-2 text-right">Monto</TableHead>
-                  <TableHead className="text-xs py-2">Medio</TableHead>
+                  <TableHead className="text-xs py-2">Medio / Fecha pago</TableHead>
                   <TableHead className="text-xs py-2">Facturas</TableHead>
                   <TableHead className="text-xs py-2 text-center">Estado CRM</TableHead>
                   <TableHead className="text-xs py-2 text-center">Soporte</TableHead>
@@ -99,13 +99,17 @@ export default async function PagosPage({
                     return (
                       <TableRow key={pago.id} className="hover:bg-slate-100/60">
                         <TableCell className="py-1.5">
-                          <span className="font-mono text-xs text-slate-400">
-                            {pago.id.slice(0, 8)}
-                          </span>
+                          {pago.numero_recibo ? (
+                            <span className="font-mono text-xs text-slate-700 tabular-nums">
+                              {pago.numero_recibo}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="py-1.5">
                           <div className="text-sm tabular-nums">
-                            {formatFechaCorta(pago.fecha_consignacion)}
+                            {pago.created_at ? formatFechaCorta(pago.created_at) : "—"}
                           </div>
                           {pago.created_by_name && (
                             <div className="text-xs text-slate-400 mt-0.5">
@@ -129,8 +133,13 @@ export default async function PagosPage({
                         <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
                           {formatCurrencyFull(pago.monto_total)}
                         </TableCell>
-                        <TableCell className="text-xs text-slate-500 py-1.5">
-                          {pago.medio_pago || "-"}
+                        <TableCell className="py-1.5">
+                          <div className="text-xs text-slate-500">
+                            {pago.medio_pago || "-"}
+                          </div>
+                          <div className="text-xs text-slate-400 tabular-nums mt-0.5">
+                            {formatFechaCorta(pago.fecha_consignacion)}
+                          </div>
                         </TableCell>
                         <TableCell className="py-1.5">
                           {pago.facturas.length === 0 ? (
@@ -159,11 +168,9 @@ export default async function PagosPage({
                               <Badge className="bg-emerald-100 text-emerald-800 text-xs hover:bg-emerald-100">
                                 Verificado
                               </Badge>
-                              {(pago.numero_recaudo || pago.numero_recibo) && (
+                              {pago.numero_recaudo && (
                                 <span className="text-xs text-slate-500">
-                                  {pago.numero_recaudo ? `R: ${pago.numero_recaudo}` : ""}
-                                  {pago.numero_recaudo && pago.numero_recibo ? " / " : ""}
-                                  {pago.numero_recibo ? `C: ${pago.numero_recibo}` : ""}
+                                  R: {pago.numero_recaudo}
                                 </span>
                               )}
                             </div>
