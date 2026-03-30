@@ -74,7 +74,7 @@ export default async function PagosPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs py-2 w-[80px]">Recibo</TableHead>
+                  <TableHead className="text-xs py-2">Voucher</TableHead>
                   <TableHead className="text-xs py-2">Registrado</TableHead>
                   <TableHead className="text-xs py-2">Cliente</TableHead>
                   <TableHead className="text-xs py-2 text-right">Monto</TableHead>
@@ -99,10 +99,14 @@ export default async function PagosPage({
                     return (
                       <TableRow key={pago.id} className="hover:bg-slate-100/60">
                         <TableCell className="py-1.5">
-                          {pago.numero_recibo ? (
-                            <span className="font-mono text-xs text-slate-700 tabular-nums">
-                              {pago.numero_recibo}
-                            </span>
+                          {pago.vouchers.length > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              {pago.vouchers.map((v, i) => (
+                                <span key={i} className="font-mono text-xs text-slate-700 tabular-nums">
+                                  {v}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-xs text-slate-300">—</span>
                           )}
@@ -168,9 +172,11 @@ export default async function PagosPage({
                               <Badge className="bg-emerald-100 text-emerald-800 text-xs hover:bg-emerald-100">
                                 Verificado
                               </Badge>
-                              {pago.numero_recaudo && (
+                              {(pago.numero_recaudo || pago.numero_recibo) && (
                                 <span className="text-xs text-slate-500">
-                                  R: {pago.numero_recaudo}
+                                  {pago.numero_recaudo ? `R: ${pago.numero_recaudo}` : ""}
+                                  {pago.numero_recaudo && pago.numero_recibo ? " / " : ""}
+                                  {pago.numero_recibo ? `C: ${pago.numero_recibo}` : ""}
                                 </span>
                               )}
                             </div>

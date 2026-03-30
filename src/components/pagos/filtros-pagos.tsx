@@ -97,20 +97,23 @@ export function FiltrosPagos({ total, auditCounts }: FiltrosPagosProps) {
           />
         </div>
 
-        <Input
-          type="date"
-          value={desde}
-          onChange={(e) => pushFilters({ desde: e.target.value })}
-          className="w-full sm:w-40 h-9 text-sm"
-          placeholder="Desde"
-        />
-        <Input
-          type="date"
-          value={hasta}
-          onChange={(e) => pushFilters({ hasta: e.target.value })}
-          className="w-full sm:w-40 h-9 text-sm"
-          placeholder="Hasta"
-        />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 whitespace-nowrap">Fecha pago:</span>
+          <Input
+            type="date"
+            value={desde}
+            onChange={(e) => pushFilters({ desde: e.target.value })}
+            className="w-full sm:w-36 h-9 text-sm"
+            placeholder="Desde"
+          />
+          <Input
+            type="date"
+            value={hasta}
+            onChange={(e) => pushFilters({ hasta: e.target.value })}
+            className="w-full sm:w-36 h-9 text-sm"
+            placeholder="Hasta"
+          />
+        </div>
 
         <span className="text-xs text-slate-500 whitespace-nowrap tabular-nums">
           {total} pagos
