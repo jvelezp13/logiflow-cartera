@@ -150,6 +150,14 @@ export function FiltrosPagos({ total, auditCounts }: FiltrosPagosProps) {
           colorInactive="bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
           colorActive="bg-red-100 text-red-800 border-red-300"
         />
+        <AuditCapsule
+          count={auditCounts.conDiscrepancia}
+          label="discrepancia"
+          active={filtro === "discrepancia"}
+          onClick={() => toggleFiltro("discrepancia")}
+          colorInactive="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
+          colorActive="bg-purple-100 text-purple-800 border-purple-300"
+        />
       </div>
     </div>
   );

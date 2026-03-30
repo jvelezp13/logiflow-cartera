@@ -44,7 +44,8 @@ export type FiltroAuditoria =
   | "verificado"
   | "monto_modificado"
   | "manual"
-  | "sin_conciliar";
+  | "sin_conciliar"
+  | "discrepancia";
 
 export interface PagosFilters {
   busqueda?: string;
@@ -58,6 +59,7 @@ export interface PagosAuditCounts {
   montoModificado: number;
   ingresoManual: number;
   sinConciliar: number;
+  conDiscrepancia: number;
 }
 
 export interface FacturaAbierta {
@@ -165,12 +167,14 @@ export async function getPagosPaginados(
   }
 
   // Filtro de conciliacion: obtener IDs via RPC antes de armar la query principal
-  let sinConciliarIds: string[] | null = null;
-  if (filters.filtro === "sin_conciliar") {
-    const { data: idRows } = await supabase.rpc("get_pago_ids_sin_conciliar", {
+  // get_pago_ids_conciliacion es parametrizado: acepta 'sin_conciliar' | 'discrepancia'
+  let conciliacionIds: string[] | null = null;
+  if (filters.filtro === "sin_conciliar" || filters.filtro === "discrepancia") {
+    const { data: idRows } = await supabase.rpc("get_pago_ids_conciliacion", {
       p_tenant_id: tenantId,
+      p_estado: filters.filtro === "sin_conciliar" ? "sin_conciliar" : "discrepancia",
     });
-    sinConciliarIds = (idRows as string[] | null) ?? [];
+    conciliacionIds = (idRows as string[] | null) ?? [];
   }
 
   let query = supabase
@@ -196,12 +200,12 @@ export async function getPagosPaginados(
     query = query.filter("ai_extraction->_audit->>monto_modificado", "eq", "true");
   } else if (filters.filtro === "manual") {
     query = query.filter("ai_extraction->_audit->>data_origin", "eq", "manual");
-  } else if (filters.filtro === "sin_conciliar" && sinConciliarIds !== null) {
-    if (sinConciliarIds.length === 0) {
-      // No hay pagos sin conciliar — forzar resultado vacío
+  } else if ((filters.filtro === "sin_conciliar" || filters.filtro === "discrepancia") && conciliacionIds !== null) {
+    if (conciliacionIds.length === 0) {
+      // No hay pagos en este estado — forzar resultado vacío
       return { pagos: [], total: 0 };
     }
-    query = query.in("id", sinConciliarIds);
+    query = query.in("id", conciliacionIds);
   }
   if (filters.desde) query = query.gte("fecha_consignacion", filters.desde);
   if (filters.hasta) query = query.lte("fecha_consignacion", filters.hasta);
@@ -342,7 +346,8 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
   const tenantId = await getTenantId();
   const supabase = await createClient();
 
-  const [sinCRMResult, montoModResult, manualResult, sinConciliarResult] =
+  // get_pagos_conciliacion devuelve ambos conteos en UNA sola llamada
+  const [sinCRMResult, montoModResult, manualResult, conciliacionResult] =
     await Promise.all([
       supabase
         .from("pagos")
@@ -362,25 +367,30 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
         .eq("tenant_id", tenantId)
         .filter("ai_extraction->_audit->>data_origin", "eq", "manual"),
 
-      supabase.rpc("get_pagos_sin_conciliar", { p_tenant_id: tenantId }),
+      supabase.rpc("get_pagos_conciliacion", { p_tenant_id: tenantId }),
     ]);
 
   if (sinCRMResult.error) throw sinCRMResult.error;
   if (montoModResult.error) throw montoModResult.error;
   if (manualResult.error) throw manualResult.error;
   // Fallback a 0 solo si la RPC no existe aún (PGRST202); otros errores deben propagarse
-  if (sinConciliarResult.error && sinConciliarResult.error.code !== "PGRST202") {
-    throw sinConciliarResult.error;
+  if (conciliacionResult.error && conciliacionResult.error.code !== "PGRST202") {
+    throw conciliacionResult.error;
   }
-  const sinConciliarCount = sinConciliarResult.error
-    ? 0
-    : Number(sinConciliarResult.data ?? 0);
+
+  // TABLE-returning RPCs devuelven un array de filas; tomamos la primera (y única)
+  const conciliacionRow = conciliacionResult.error
+    ? null
+    : Array.isArray(conciliacionResult.data)
+      ? (conciliacionResult.data[0] as { sin_conciliar: number; con_discrepancia: number } | undefined)
+      : (conciliacionResult.data as { sin_conciliar: number; con_discrepancia: number } | null);
 
   return {
     sinCRM: sinCRMResult.count || 0,
     montoModificado: montoModResult.count || 0,
     ingresoManual: manualResult.count || 0,
-    sinConciliar: sinConciliarCount,
+    sinConciliar: Number(conciliacionRow?.sin_conciliar ?? 0),
+    conDiscrepancia: Number(conciliacionRow?.con_discrepancia ?? 0),
   };
 }
 
