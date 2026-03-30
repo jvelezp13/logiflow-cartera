@@ -126,6 +126,23 @@ export async function getPagosPaginados(
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
+  const sanitized = filters.busqueda
+    ? sanitizeSearchInput(filters.busqueda)
+    : null;
+
+  // Buscar por factura solo si el término parece uno (alfanumérico 4+ chars)
+  let pagoIdsByFactura: string[] | null = null;
+  if (sanitized && sanitized.length >= 4) {
+    const { data: matchedFacturas } = await supabase
+      .from("pago_facturas")
+      .select("pago_id")
+      .ilike("no_factura", `%${sanitized}%`)
+      .limit(100);
+    if (matchedFacturas && matchedFacturas.length > 0) {
+      pagoIdsByFactura = [...new Set(matchedFacturas.map((f) => f.pago_id))].slice(0, 50);
+    }
+  }
+
   let query = supabase
     .from("pagos")
     .select(
@@ -134,25 +151,17 @@ export async function getPagosPaginados(
     )
     .eq("tenant_id", tenantId);
 
-  if (filters.busqueda) {
-    const sanitized = sanitizeSearchInput(filters.busqueda);
-    if (sanitized) {
+  if (sanitized) {
+    if (pagoIdsByFactura) {
+      query = query.or(`codigo_cliente.ilike.%${sanitized}%,id.in.(${pagoIdsByFactura.join(",")})`);
+    } else {
       query = query.ilike("codigo_cliente", `%${sanitized}%`);
     }
   }
-
-  if (filters.estado === "pendiente") {
-    query = query.eq("estado", "registrado");
-  } else if (filters.estado === "verificado") {
-    query = query.eq("estado", "verificado");
-  }
-
-  if (filters.desde) {
-    query = query.gte("fecha_consignacion", filters.desde);
-  }
-  if (filters.hasta) {
-    query = query.lte("fecha_consignacion", filters.hasta);
-  }
+  if (filters.estado === "pendiente") query = query.eq("estado", "registrado");
+  else if (filters.estado === "verificado") query = query.eq("estado", "verificado");
+  if (filters.desde) query = query.gte("fecha_consignacion", filters.desde);
+  if (filters.hasta) query = query.lte("fecha_consignacion", filters.hasta);
 
   const { data, error, count } = await query
     .order("fecha_consignacion", { ascending: false })
