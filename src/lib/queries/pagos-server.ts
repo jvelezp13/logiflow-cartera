@@ -25,12 +25,13 @@ export interface PagoResumen {
   created_at: string | null;
   created_by_name: string | null;
   codigo_cliente: string | null;
+  nombre_cliente: string | null;
+  observaciones: string | null;
   facturas: PagoFactura[];
 }
 
 export interface PagoDetalle extends PagoResumen {
   codigo_cliente: string;
-  observaciones: string | null;
   nota_credito: string | null;
   valor_nota_credito: number | null;
   soporte_url_firmada: string | null;
@@ -50,6 +51,18 @@ export interface FacturaAbierta {
   fecha_vencimiento: string | null;
   mora: number;
   total: number;
+}
+
+// --- Helpers ---
+
+type ProfilesJoin =
+  | { full_name: string | null }[]
+  | { full_name: string | null }
+  | null;
+
+function extractProfileName(profiles: ProfilesJoin): string | null {
+  const profile = Array.isArray(profiles) ? profiles[0] : profiles;
+  return profile?.full_name ?? null;
 }
 
 // --- Queries ---
@@ -81,14 +94,7 @@ export async function getPagosCliente(
 
   if (error) throw error;
 
-  return (data || []).map((row) => {
-    const profiles = row.profiles as
-      | { full_name: string | null }[]
-      | { full_name: string | null }
-      | null;
-    const profile = Array.isArray(profiles) ? profiles[0] : profiles;
-
-    return {
+  return (data || []).map((row) => ({
       id: row.id,
       fecha_consignacion: row.fecha_consignacion,
       monto_total: Number(row.monto_total),
@@ -99,8 +105,10 @@ export async function getPagosCliente(
       estado: row.estado,
       soporte_key: row.soporte_key,
       created_at: row.created_at,
-      created_by_name: profile?.full_name ?? null,
+      created_by_name: extractProfileName(row.profiles as ProfilesJoin),
       codigo_cliente: null,
+      nombre_cliente: null,
+      observaciones: null,
       facturas: (
         (row.pago_facturas as PagoFactura[] | null) || []
       ).map((f) => ({
@@ -109,8 +117,7 @@ export async function getPagosCliente(
         valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
         valor_aplicado: Number(f.valor_aplicado),
       })),
-    };
-  });
+    }));
 }
 
 /**
@@ -146,7 +153,7 @@ export async function getPagosPaginados(
   let query = supabase
     .from("pagos")
     .select(
-      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, estado, soporte_key, created_at, codigo_cliente, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, estado, soporte_key, created_at, codigo_cliente, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
       { count: "exact" }
     )
     .eq("tenant_id", tenantId);
@@ -169,14 +176,34 @@ export async function getPagosPaginados(
 
   if (error) throw error;
 
-  const pagos: PagoResumen[] = (data || []).map((row) => {
-    const profiles = row.profiles as
-      | { full_name: string | null }[]
-      | { full_name: string | null }
-      | null;
-    const profile = Array.isArray(profiles) ? profiles[0] : profiles;
+  // Lookup de nombres de clientes desde vista_cliente_resumen
+  const codigosUnicos = [
+    ...new Set(
+      (data || [])
+        .map((row) => row.codigo_cliente as string | null)
+        .filter((c): c is string => !!c)
+    ),
+  ];
 
-    return {
+  let nombresPorCodigo: Map<string, string> = new Map();
+  if (codigosUnicos.length > 0) {
+    const { data: clientesData } = await supabase
+      .from("vista_cliente_resumen")
+      .select("codigo_cliente, razon_social, nombre_negocio")
+      .eq("tenant_id", tenantId)
+      .in("codigo_cliente", codigosUnicos);
+
+    nombresPorCodigo = new Map(
+      (clientesData || []).map((c) => [
+        c.codigo_cliente as string,
+        (c.razon_social as string | null) ||
+          (c.nombre_negocio as string | null) ||
+          "",
+      ])
+    );
+  }
+
+  const pagos: PagoResumen[] = (data || []).map((row) => ({
       id: row.id,
       fecha_consignacion: row.fecha_consignacion,
       monto_total: Number(row.monto_total),
@@ -184,11 +211,15 @@ export async function getPagosPaginados(
       vouchers: row.vouchers || [],
       numero_recaudo: row.numero_recaudo,
       numero_recibo: row.numero_recibo,
+      observaciones: row.observaciones as string | null,
       estado: row.estado,
       soporte_key: row.soporte_key,
       created_at: row.created_at,
-      created_by_name: profile?.full_name ?? null,
+      created_by_name: extractProfileName(row.profiles as ProfilesJoin),
       codigo_cliente: row.codigo_cliente,
+      nombre_cliente: row.codigo_cliente
+        ? (nombresPorCodigo.get(row.codigo_cliente) || null)
+        : null,
       facturas: (
         (row.pago_facturas as PagoFactura[] | null) || []
       ).map((f) => ({
@@ -197,8 +228,7 @@ export async function getPagosPaginados(
         valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
         valor_aplicado: Number(f.valor_aplicado),
       })),
-    };
-  });
+    }));
 
   return { pagos, total: count || 0 };
 }
@@ -223,12 +253,6 @@ export async function getPagoDetalle(
 
   if (error || !data) return null;
 
-  const profiles = data.profiles as
-    | { full_name: string | null }[]
-    | { full_name: string | null }
-    | null;
-  const profile = Array.isArray(profiles) ? profiles[0] : profiles;
-
   let soporteUrlFirmada: string | null = null;
   if (data.soporte_key) {
     try {
@@ -248,6 +272,7 @@ export async function getPagoDetalle(
     numero_recaudo: data.numero_recaudo,
     numero_recibo: data.numero_recibo,
     observaciones: data.observaciones,
+    nombre_cliente: null,
     nota_credito: data.nota_credito,
     valor_nota_credito: data.valor_nota_credito
       ? Number(data.valor_nota_credito)
@@ -258,7 +283,7 @@ export async function getPagoDetalle(
     ai_extraction: data.ai_extraction,
     importado_historico: data.importado_historico,
     created_at: data.created_at,
-    created_by_name: profile?.full_name ?? null,
+    created_by_name: extractProfileName(data.profiles as ProfilesJoin),
     facturas: (
       (data.pago_facturas as PagoFactura[] | null) || []
     ).map((f) => ({

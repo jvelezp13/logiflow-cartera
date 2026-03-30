@@ -20,6 +20,7 @@ import { FiltrosPagos } from "@/components/pagos/filtros-pagos";
 import { Paginacion } from "@/components/paginacion";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { CodigosCRMForm } from "@/components/pagos/codigos-crm-form";
+import { MessageSquare } from "lucide-react";
 
 import Link from "next/link";
 
@@ -73,11 +74,12 @@ export default async function PagosPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs py-2">Fecha</TableHead>
+                  <TableHead className="text-xs py-2 w-[80px]">Ref</TableHead>
+                  <TableHead className="text-xs py-2">Fecha / Registrado</TableHead>
                   <TableHead className="text-xs py-2">Cliente</TableHead>
                   <TableHead className="text-xs py-2 text-right">Monto</TableHead>
                   <TableHead className="text-xs py-2">Medio</TableHead>
-                  <TableHead className="text-xs py-2 text-center">Facturas</TableHead>
+                  <TableHead className="text-xs py-2">Facturas</TableHead>
                   <TableHead className="text-xs py-2 text-center">Estado CRM</TableHead>
                   <TableHead className="text-xs py-2 text-center">Soporte</TableHead>
                 </TableRow>
@@ -85,61 +87,118 @@ export default async function PagosPage({
               <TableBody>
                 {pagos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
                       No se encontraron pagos
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pagos.map((pago) => (
-                    <TableRow key={pago.id} className="hover:bg-slate-100/60">
-                      <TableCell className="text-sm tabular-nums py-1.5">
-                        {formatFechaCorta(pago.fecha_consignacion)}
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <Link
-                          href={`/clientes/${pago.codigo_cliente}`}
-                          className="text-sm text-blue-600 hover:underline"
-                        >
-                          {pago.codigo_cliente}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
-                        {formatCurrencyFull(pago.monto_total)}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-500 py-1.5">
-                        {pago.medio_pago || "-"}
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        <Badge variant="secondary" className="text-xs">
-                          {pago.facturas.length}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        {pago.estado === "verificado" ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 text-xs hover:bg-emerald-100">
-                            Verificado
-                          </Badge>
-                        ) : profile.role !== "viewer" ? (
-                          <CodigosCRMForm
-                            pagoId={pago.id}
-                            currentRecaudo={pago.numero_recaudo}
-                            currentRecibo={pago.numero_recibo}
-                          />
-                        ) : (
-                          <Badge className="bg-amber-100 text-amber-800 text-xs hover:bg-amber-100">
-                            Pendiente
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center py-1.5">
-                        {pago.soporte_key ? (
-                          <SoportePreview soporteKey={pago.soporte_key} />
-                        ) : (
-                          <span className="text-xs text-slate-300">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  pagos.map((pago) => {
+                    const facturasMostradas = pago.facturas.slice(0, 2);
+                    const facturasExtra = pago.facturas.length - 2;
+
+                    return (
+                      <TableRow key={pago.id} className="hover:bg-slate-100/60">
+                        <TableCell className="py-1.5">
+                          <span className="font-mono text-xs text-slate-400">
+                            {pago.id.slice(0, 8)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          <div className="text-sm tabular-nums">
+                            {formatFechaCorta(pago.fecha_consignacion)}
+                          </div>
+                          {pago.created_by_name && (
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {pago.created_by_name}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          <Link
+                            href={`/clientes/${pago.codigo_cliente}`}
+                            className="text-sm text-blue-600 hover:underline leading-tight"
+                          >
+                            {pago.nombre_cliente || pago.codigo_cliente}
+                          </Link>
+                          {pago.nombre_cliente && (
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {pago.codigo_cliente}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
+                          {formatCurrencyFull(pago.monto_total)}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500 py-1.5">
+                          {pago.medio_pago || "-"}
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          {pago.facturas.length === 0 ? (
+                            <span className="text-xs text-slate-300">-</span>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {facturasMostradas.map((f) => (
+                                <span
+                                  key={f.id}
+                                  className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded"
+                                >
+                                  {f.no_factura}
+                                </span>
+                              ))}
+                              {facturasExtra > 0 && (
+                                <Badge variant="secondary" className="text-xs h-5 px-1.5">
+                                  +{facturasExtra}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center py-1.5">
+                          {pago.estado === "verificado" ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <Badge className="bg-emerald-100 text-emerald-800 text-xs hover:bg-emerald-100">
+                                Verificado
+                              </Badge>
+                              {(pago.numero_recaudo || pago.numero_recibo) && (
+                                <span className="text-xs text-slate-500">
+                                  {pago.numero_recaudo ? `R: ${pago.numero_recaudo}` : ""}
+                                  {pago.numero_recaudo && pago.numero_recibo ? " / " : ""}
+                                  {pago.numero_recibo ? `C: ${pago.numero_recibo}` : ""}
+                                </span>
+                              )}
+                            </div>
+                          ) : profile.role !== "viewer" ? (
+                            <CodigosCRMForm
+                              pagoId={pago.id}
+                              currentRecaudo={pago.numero_recaudo}
+                              currentRecibo={pago.numero_recibo}
+                            />
+                          ) : (
+                            <Badge className="bg-amber-100 text-amber-800 text-xs hover:bg-amber-100">
+                              Pendiente
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center py-1.5">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {pago.soporte_key ? (
+                              <SoportePreview soporteKey={pago.soporte_key} />
+                            ) : (
+                              <span className="text-xs text-slate-300">-</span>
+                            )}
+                            {pago.observaciones && (
+                              <span
+                                title={pago.observaciones}
+                                className="inline-flex text-slate-400 hover:text-slate-600 cursor-default"
+                              >
+                                <MessageSquare className="h-3.5 w-3.5" />
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
