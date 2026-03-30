@@ -113,7 +113,7 @@ export default async function PagosPage({
                         </TableCell>
                         <TableCell className="py-1.5">
                           <div className="text-sm tabular-nums">
-                            {pago.created_at ? formatFechaCorta(pago.created_at) : "—"}
+                            {pago.created_at ? formatFechaCorta(pago.created_at.slice(0, 10)) : "—"}
                           </div>
                           {pago.created_by_name && (
                             <div className="text-xs text-slate-400 mt-0.5">
