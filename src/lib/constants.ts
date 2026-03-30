@@ -1,3 +1,6 @@
+/** Diferencias menores a este monto se tratan como redondeo, no como abono */
+export const UMBRAL_REDONDEO_PAGO = 1_000;
+
 export const RANGE_COLORS: Record<string, string> = {
   "Al dia": "#22c55e",
   "1-5 dias": "#4ade80",

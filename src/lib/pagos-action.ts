@@ -7,6 +7,8 @@ import { generarUrlSubida, generarUrlLectura, eliminarObjeto } from "@/lib/r2";
 import { extraerDatosSoporte, type DatosSoporte } from "@/lib/ai-extraction";
 import { logError } from "@/lib/logger";
 import { syncFetch } from "@/lib/sync-client";
+import { formatCurrencyFull } from "@/lib/format";
+import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
 
 // --- Types ---
 
@@ -176,6 +178,17 @@ export async function crearPago(
   if (!codigoCliente) return { error: "Cliente es requerido" };
   if (!fechaConsignacion) return { error: "Fecha de consignacion es requerida" };
 
+  // Strings ISO (YYYY-MM-DD) se comparan lexicográficamente sin problemas de timezone
+  const hoy = new Date().toISOString().slice(0, 10);
+  const haceUnAno = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+
+  if (fechaConsignacion > hoy) {
+    return { error: "La fecha de consignación no puede ser futura" };
+  }
+  if (fechaConsignacion < haceUnAno) {
+    return { error: "La fecha de consignación no puede ser mayor a 1 año" };
+  }
+
   const montoTotal = parseInt(montoTotalStr, 10);
   if (!montoTotal || montoTotal <= 0) {
     return { error: "Monto debe ser mayor a 0" };
@@ -192,21 +205,41 @@ export async function crearPago(
     return { error: "Debe seleccionar al menos una factura" };
   }
 
-  // Validar que las facturas pertenezcan al cliente
+  const sumaAplicada = facturas.reduce((sum, f) => sum + f.valor_aplicado, 0);
+  const diferenciaMonto = Math.abs(montoTotal - sumaAplicada);
+
+  if (diferenciaMonto > UMBRAL_REDONDEO_PAGO) {
+    return {
+      error: `La suma aplicada (${formatCurrencyFull(sumaAplicada)}) difiere del monto total (${formatCurrencyFull(montoTotal)}) por más de $1.000`,
+    };
+  }
+
   const supabase = await createClient();
   const facturasNos = facturas.map((f) => f.no_factura);
   const { data: facturasValidas } = await supabase
     .from("cartera")
-    .select("no_factura")
+    .select("no_factura, total")
     .eq("tenant_id", profile.tenant_id)
     .eq("codigo_cliente", codigoCliente)
     .in("no_factura", facturasNos);
 
-  const validasSet = new Set((facturasValidas || []).map((f) => f.no_factura));
-  const invalidas = facturasNos.filter((n) => !validasSet.has(n));
+  const carteraMap = new Map(
+    (facturasValidas || []).map((f) => [f.no_factura, Number(f.total)])
+  );
+  const invalidas = facturasNos.filter((n) => !carteraMap.has(n));
   if (invalidas.length > 0) {
     return {
       error: `Facturas no pertenecen a este cliente: ${invalidas.join(", ")}`,
+    };
+  }
+
+  const sobreAplicadas = facturas.filter((f) => {
+    const totalFactura = carteraMap.get(f.no_factura);
+    return totalFactura !== undefined && f.valor_aplicado > totalFactura;
+  });
+  if (sobreAplicadas.length > 0) {
+    return {
+      error: `Valor aplicado excede el saldo de: ${sobreAplicadas.map((f) => f.no_factura).join(", ")}`,
     };
   }
 
@@ -225,13 +258,36 @@ export async function crearPago(
     : null;
 
   // Parse AI extraction JSON
-  let aiExtraction: unknown = null;
+  let aiExtraction: Record<string, unknown> | null = null;
   if (aiExtractionStr) {
     try {
-      aiExtraction = JSON.parse(aiExtractionStr);
+      aiExtraction = JSON.parse(aiExtractionStr) as Record<string, unknown>;
     } catch {
       // no-op, campo opcional
     }
+  }
+
+  // Enriquecer con datos de auditoría: qué sugirió la IA vs qué ingresó el usuario
+  if (aiExtraction && typeof aiExtraction === "object") {
+    const datos = aiExtraction.datos as Record<string, unknown> | undefined;
+    const aiMonto =
+      datos?.valor_pagado !== undefined && datos.valor_pagado !== null
+        ? Number(datos.valor_pagado)
+        : null;
+
+    const audit =
+      aiMonto !== null && !Number.isNaN(aiMonto) && aiMonto > 0
+        ? {
+            monto_ia: aiMonto,
+            monto_usuario: montoTotal,
+            monto_modificado: Math.abs(montoTotal - aiMonto) / aiMonto > 0.05,
+            data_origin: "ai_assisted" as const,
+          }
+        : { data_origin: "ai_assisted" as const };
+
+    aiExtraction = { ...aiExtraction, _audit: audit };
+  } else {
+    aiExtraction = { _audit: { data_origin: "manual" } };
   }
 
   // Determinar estado
