@@ -39,11 +39,25 @@ export interface PagoDetalle extends PagoResumen {
   importado_historico: boolean;
 }
 
+export type FiltroAuditoria =
+  | "sin_crm"
+  | "verificado"
+  | "monto_modificado"
+  | "manual"
+  | "sin_conciliar";
+
 export interface PagosFilters {
   busqueda?: string;
-  estado?: string;
+  filtro?: FiltroAuditoria;
   desde?: string;
   hasta?: string;
+}
+
+export interface PagosAuditCounts {
+  sinCRM: number;
+  montoModificado: number;
+  ingresoManual: number;
+  sinConciliar: number;
 }
 
 export interface FacturaAbierta {
@@ -150,6 +164,15 @@ export async function getPagosPaginados(
     }
   }
 
+  // Filtro de conciliacion: obtener IDs via RPC antes de armar la query principal
+  let sinConciliarIds: string[] | null = null;
+  if (filters.filtro === "sin_conciliar") {
+    const { data: idRows } = await supabase.rpc("get_pago_ids_sin_conciliar", {
+      p_tenant_id: tenantId,
+    });
+    sinConciliarIds = (idRows as string[] | null) ?? [];
+  }
+
   let query = supabase
     .from("pagos")
     .select(
@@ -165,8 +188,21 @@ export async function getPagosPaginados(
       query = query.ilike("codigo_cliente", `%${sanitized}%`);
     }
   }
-  if (filters.estado === "pendiente") query = query.eq("estado", "registrado");
-  else if (filters.estado === "verificado") query = query.eq("estado", "verificado");
+  if (filters.filtro === "sin_crm") {
+    query = query.eq("estado", "registrado");
+  } else if (filters.filtro === "verificado") {
+    query = query.eq("estado", "verificado");
+  } else if (filters.filtro === "monto_modificado") {
+    query = query.filter("ai_extraction->_audit->>monto_modificado", "eq", "true");
+  } else if (filters.filtro === "manual") {
+    query = query.filter("ai_extraction->_audit->>data_origin", "eq", "manual");
+  } else if (filters.filtro === "sin_conciliar" && sinConciliarIds !== null) {
+    if (sinConciliarIds.length === 0) {
+      // No hay pagos sin conciliar — forzar resultado vacío
+      return { pagos: [], total: 0 };
+    }
+    query = query.in("id", sinConciliarIds);
+  }
   if (filters.desde) query = query.gte("fecha_consignacion", filters.desde);
   if (filters.hasta) query = query.lte("fecha_consignacion", filters.hasta);
 
@@ -296,20 +332,56 @@ export async function getPagoDetalle(
 }
 
 /**
- * Count de pagos sin codigos CRM completos (para KPI y badge).
+ * Counts de auditoria para las capsulas de filtro:
+ * - sinCRM: pagos sin codigos CRM
+ * - montoModificado: pagos donde IA detecto que el monto fue editado manualmente
+ * - ingresoManual: pagos ingresados a mano (sin IA)
+ * - sinConciliar: pagos verificados donde la factura aun no refleja el pago en cartera
  */
-export async function getPagosSinCRM(): Promise<number> {
+export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
   const tenantId = await getTenantId();
   const supabase = await createClient();
 
-  const { count, error } = await supabase
-    .from("pagos")
-    .select("*", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .eq("estado", "registrado");
+  const [sinCRMResult, montoModResult, manualResult, sinConciliarResult] =
+    await Promise.all([
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("estado", "registrado"),
 
-  if (error) throw error;
-  return count || 0;
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("ai_extraction->_audit->>monto_modificado", "eq", "true"),
+
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("ai_extraction->_audit->>data_origin", "eq", "manual"),
+
+      supabase.rpc("get_pagos_sin_conciliar", { p_tenant_id: tenantId }),
+    ]);
+
+  if (sinCRMResult.error) throw sinCRMResult.error;
+  if (montoModResult.error) throw montoModResult.error;
+  if (manualResult.error) throw manualResult.error;
+  // Fallback a 0 solo si la RPC no existe aún (PGRST202); otros errores deben propagarse
+  if (sinConciliarResult.error && sinConciliarResult.error.code !== "PGRST202") {
+    throw sinConciliarResult.error;
+  }
+  const sinConciliarCount = sinConciliarResult.error
+    ? 0
+    : Number(sinConciliarResult.data ?? 0);
+
+  return {
+    sinCRM: sinCRMResult.count || 0,
+    montoModificado: montoModResult.count || 0,
+    ingresoManual: manualResult.count || 0,
+    sinConciliar: sinConciliarCount,
+  };
 }
 
 /**

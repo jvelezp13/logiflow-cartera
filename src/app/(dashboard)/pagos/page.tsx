@@ -12,7 +12,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
-import { getPagosPaginados, getPagosSinCRM } from "@/lib/queries/pagos-server";
+import { getPagosPaginados, getPagosAuditCounts, type FiltroAuditoria } from "@/lib/queries/pagos-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { buildPageUrl } from "@/lib/url";
@@ -35,22 +35,22 @@ export default async function PagosPage({
 
   const params = await searchParams;
   const busqueda = params.q || "";
-  const estado = params.estado || undefined;
+  const filtro = (params.filtro as FiltroAuditoria) || undefined;
   const desde = params.desde || undefined;
   const hasta = params.hasta || undefined;
   const page = Math.max(1, Number(params.page) || 1);
 
-  const [profile, incluirCastigada, { pagos, total }, sinCRM] =
+  const [profile, incluirCastigada, { pagos, total }, auditCounts] =
     await Promise.all([
       getUserProfile(),
       getIncluirCastigada(),
       getPagosPaginados(page, {
         busqueda: busqueda || undefined,
-        estado,
+        filtro,
         desde,
         hasta,
       }),
-      getPagosSinCRM(),
+      getPagosAuditCounts(),
     ]);
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
@@ -66,7 +66,7 @@ export default async function PagosPage({
 
       <div className="p-6 space-y-4 bg-slate-50 min-h-screen">
         <Suspense fallback={<div className="h-10 bg-slate-200 rounded animate-pulse" />}>
-          <FiltrosPagos total={total} sinCRM={sinCRM} />
+          <FiltrosPagos total={total} auditCounts={auditCounts} />
         </Suspense>
 
         <Card>
@@ -211,7 +211,7 @@ export default async function PagosPage({
           total={total}
           itemsPorPagina={ITEMS_PER_PAGE}
           buildUrl={(p) =>
-            buildPageUrl("/pagos", p, { busqueda, estado, desde, hasta })
+            buildPageUrl("/pagos", p, { busqueda, filtro, desde, hasta })
           }
         />
       </div>

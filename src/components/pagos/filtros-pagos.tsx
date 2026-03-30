@@ -3,27 +3,51 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Search } from "lucide-react";
+import type { PagosAuditCounts } from "@/lib/queries/pagos-server";
 
 interface FiltrosPagosProps {
   total: number;
-  sinCRM: number;
+  auditCounts: PagosAuditCounts;
 }
 
-export function FiltrosPagos({ total, sinCRM }: FiltrosPagosProps) {
+interface CapsuleProps {
+  count: number;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  colorInactive: string;
+  colorActive: string;
+}
+
+function AuditCapsule({
+  count,
+  label,
+  active,
+  onClick,
+  colorInactive,
+  colorActive,
+}: CapsuleProps) {
+  if (count === 0) return null;
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+        active ? colorActive : colorInactive
+      }`}
+    >
+      {count} {label}
+    </button>
+  );
+}
+
+export function FiltrosPagos({ total, auditCounts }: FiltrosPagosProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const q = searchParams.get("q") || "";
-  const estado = searchParams.get("estado") || "all";
+  const filtro = searchParams.get("filtro") || "";
   const desde = searchParams.get("desde") || "";
   const hasta = searchParams.get("hasta") || "";
 
@@ -31,7 +55,7 @@ export function FiltrosPagos({ total, sinCRM }: FiltrosPagosProps) {
     (updates: Record<string, string>) => {
       const params = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(updates)) {
-        if (value && value !== "all" && value !== "") {
+        if (value && value !== "") {
           params.set(key, value);
         } else {
           params.delete(key);
@@ -53,6 +77,13 @@ export function FiltrosPagos({ total, sinCRM }: FiltrosPagosProps) {
     [pushFilters]
   );
 
+  const toggleFiltro = useCallback(
+    (value: string) => {
+      pushFilters({ filtro: filtro === value ? "" : value });
+    },
+    [filtro, pushFilters]
+  );
+
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -65,20 +96,6 @@ export function FiltrosPagos({ total, sinCRM }: FiltrosPagosProps) {
             className="pl-9 h-9 text-sm"
           />
         </div>
-
-        <Select
-          value={estado}
-          onValueChange={(v) => pushFilters({ estado: v })}
-        >
-          <SelectTrigger className="w-full sm:w-44 h-9 text-sm">
-            <SelectValue placeholder="Estado CRM" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los estados</SelectItem>
-            <SelectItem value="pendiente">Pendiente CRM</SelectItem>
-            <SelectItem value="verificado">Verificado</SelectItem>
-          </SelectContent>
-        </Select>
 
         <Input
           type="date"
@@ -100,20 +117,40 @@ export function FiltrosPagos({ total, sinCRM }: FiltrosPagosProps) {
         </span>
       </div>
 
-      {sinCRM > 0 && (
-        <button
-          onClick={() =>
-            pushFilters({ estado: estado === "pendiente" ? "all" : "pendiente" })
-          }
-          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
-            estado === "pendiente"
-              ? "bg-amber-100 text-amber-800 border-amber-300"
-              : "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"
-          }`}
-        >
-          {sinCRM} sin codigos CRM
-        </button>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <AuditCapsule
+          count={auditCounts.sinCRM}
+          label="sin CRM"
+          active={filtro === "sin_crm"}
+          onClick={() => toggleFiltro("sin_crm")}
+          colorInactive="bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"
+          colorActive="bg-amber-100 text-amber-800 border-amber-300"
+        />
+        <AuditCapsule
+          count={auditCounts.montoModificado}
+          label="monto modificado"
+          active={filtro === "monto_modificado"}
+          onClick={() => toggleFiltro("monto_modificado")}
+          colorInactive="bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
+          colorActive="bg-orange-100 text-orange-800 border-orange-300"
+        />
+        <AuditCapsule
+          count={auditCounts.ingresoManual}
+          label="ingreso manual"
+          active={filtro === "manual"}
+          onClick={() => toggleFiltro("manual")}
+          colorInactive="bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+          colorActive="bg-slate-200 text-slate-800 border-slate-400"
+        />
+        <AuditCapsule
+          count={auditCounts.sinConciliar}
+          label="sin conciliar"
+          active={filtro === "sin_conciliar"}
+          onClick={() => toggleFiltro("sin_conciliar")}
+          colorInactive="bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+          colorActive="bg-red-100 text-red-800 border-red-300"
+        />
+      </div>
     </div>
   );
 }
