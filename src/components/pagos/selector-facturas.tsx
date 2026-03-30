@@ -35,11 +35,12 @@ export function SelectorFacturas({
   const sugerirFIFO = useCallback(() => {
     if (montoDisponible <= 0 || facturas.length === 0) return;
 
+    const UMBRAL_REDONDEO = 1000;
     const sugeridas: FacturaSeleccionada[] = [];
     let restante = montoDisponible;
 
     for (const f of facturas) {
-      if (restante <= 0) break;
+      if (restante <= UMBRAL_REDONDEO) break;
       const aplicar = Math.min(f.total, restante);
       sugeridas.push({
         no_factura: f.no_factura,
