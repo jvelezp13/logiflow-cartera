@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { generarUrlSubida, generarUrlLectura, eliminarObjeto } from "@/lib/r2";
 import { extraerDatosSoporte, type DatosSoporte } from "@/lib/ai-extraction";
 import { logError } from "@/lib/logger";
+import { syncFetch } from "@/lib/sync-client";
 
 // --- Types ---
 
@@ -306,6 +307,15 @@ export async function crearPago(
 
   revalidatePath(`/clientes/${codigoCliente}`);
   revalidatePath("/pagos");
+
+  // Fire-and-forget: disparar sync de cartera post-pago
+  if (process.env.SYNC_API_URL) {
+    syncFetch("/api/jobs/eforce-cartera/trigger", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: profile.tenant_id }),
+    }).catch((e) => logError("crearPago:sync_cartera", e));
+  }
+
   return { success: true, pagoId: pago.id };
 }
 
