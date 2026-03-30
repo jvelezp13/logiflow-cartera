@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { formatCurrencyFull, formatCurrencyShort } from "@/lib/format";
 import {
   getClientesMoraConPedidos,
@@ -50,7 +51,7 @@ export default async function PreFacturacionPage({
   const totalClientes = clientesActivos.length;
   const totalPedidos = clientesActivos.reduce((acc, c) => acc + c.cantidad_pedidos, 0);
   const montoRiesgo = modo === "mora"
-    ? clientesMora.reduce((acc, c) => acc + c.total_vencido, 0)
+    ? clientesMora.reduce((acc, c) => acc + c.total_vencido_grave, 0)
     : clientesCupo.reduce((acc, c) => acc + c.excede_por, 0);
 
   const resumenWhatsApp = generarResumenWhatsApp(modo, clientesActivos, totalClientes, totalPedidos, montoRiesgo);
@@ -131,13 +132,14 @@ function TablaMora({
               Mora <ArrowDownWideNarrow className="h-3 w-3 text-slate-400" />
             </span>
           </TableHead>
+          <TableHead className="text-xs py-2 text-center">Facturas</TableHead>
           <TableHead className="text-xs py-2 text-right">Deuda vencida</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {clientes.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+            <TableCell colSpan={7} className="text-center py-8 text-slate-500">
               No hay pedidos pendientes de clientes con mora &gt; 5 dias
             </TableCell>
           </TableRow>
@@ -177,8 +179,13 @@ function TablaMora({
                     {moraBadge.label}
                   </span>
                 </TableCell>
+                <TableCell className="text-center py-1.5">
+                  <Badge className="bg-red-50 text-red-600 tabular-nums">
+                    {cliente.num_facturas_grave}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-right text-sm font-medium tabular-nums py-1.5 text-red-600">
-                  {formatCurrencyFull(cliente.total_vencido)}
+                  {formatCurrencyFull(cliente.total_vencido_grave)}
                 </TableCell>
               </TableRow>
             );
@@ -303,7 +310,7 @@ function generarResumenWhatsApp(
 
     if (modo === "mora") {
       const cm = c as ClientePreFacturacionMora;
-      lineas.push(`${cm.codigo_cliente} — ${nombre} — ${pedidos} — Mora ${cm.maxima_mora} dias — Vencido ${formatCurrencyShort(cm.total_vencido)}`);
+      lineas.push(`${cm.codigo_cliente} — ${nombre} — ${pedidos} — Mora ${cm.maxima_mora} dias — Vencido ${formatCurrencyShort(cm.total_vencido_grave)}`);
     } else {
       const cc = c as ClienteCupoExcedido;
       const pct = ((cc.total_deuda + cc.total_pedidos) / cc.cupo_asignado * 100).toFixed(0);

@@ -46,6 +46,8 @@ export interface ClienteEnriquecido {
   ultimo_pedido_fecha: string | null;
 }
 
+const CLIENTE_RESUMEN_COLUMNS = "codigo_cliente, razon_social, nombre_negocio, nombre_completo, documento, ciudad, departamento, barrio, direccion, telefono, correo, segmento, tipologia, canal, subcanal, estado, total_deuda, total_vencido, total_por_vencer, num_facturas, maxima_mora, pedidos_pendientes, estado_credito, cupo_asignado, ultimo_pedido_fecha";
+
 export interface FacturaEnriquecida {
   codigo_cliente: string;
   razon_social: string | null;
@@ -98,7 +100,8 @@ export interface ClientePreFacturacionMora {
   cantidad_pedidos: number;
   total_pedidos: number;
   maxima_mora: number;
-  total_vencido: number;
+  total_vencido_grave: number;
+  num_facturas_grave: number;
   severidad: Exclude<Severidad, "tolerable">;
 }
 
@@ -185,7 +188,7 @@ export async function getTopClientesDeuda(limit = 10): Promise<ClienteEnriquecid
 
   let query = supabase
     .from("vista_cliente_resumen")
-    .select("*")
+    .select(CLIENTE_RESUMEN_COLUMNS)
     .eq("tenant_id", tenantId)
     .gt("total_deuda", 0)
     .order("total_deuda", { ascending: false })
@@ -329,7 +332,7 @@ export async function getClientesConSaldo(options?: {
 
   let query = supabase
     .from("vista_cliente_resumen")
-    .select("*", { count: "exact" })
+    .select(CLIENTE_RESUMEN_COLUMNS, { count: "exact" })
     .eq("tenant_id", tenantId)
     .gt("total_deuda", 0);
 
@@ -394,7 +397,7 @@ export async function getDetalleCliente(codigoCliente: string): Promise<{
   const [infoResult, facturasResult, pedidosResult] = await Promise.all([
     supabase
       .from("vista_cliente_resumen")
-      .select("*")
+      .select(CLIENTE_RESUMEN_COLUMNS)
       .eq("tenant_id", tenantId)
       .eq("codigo_cliente", codigoCliente)
       .single(),
@@ -429,7 +432,7 @@ export async function getConteoClientesConSaldo(): Promise<number> {
 
   let query = supabase
     .from("vista_cliente_resumen")
-    .select("*", { count: "exact", head: true })
+    .select("codigo_cliente", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
     .gt("total_deuda", 0);
 
@@ -653,7 +656,7 @@ export async function getClientesMoraConPedidos(): Promise<ClientePreFacturacion
   // Query 2: solo clientes con mora > 5 (atencion o critico)
   const { data: clientesRaw, error: errorClientes } = await supabase
     .from("vista_cliente_resumen")
-    .select("codigo_cliente, nombre_negocio, maxima_mora, total_vencido")
+    .select("codigo_cliente, nombre_negocio, maxima_mora, total_vencido_grave, num_facturas_grave")
     .eq("tenant_id", tenantId)
     .in("codigo_cliente", codigosUnicos)
     .gt("maxima_mora", 5);
@@ -670,7 +673,8 @@ export async function getClientesMoraConPedidos(): Promise<ClientePreFacturacion
       cantidad_pedidos: pedidosInfo.cantidad,
       total_pedidos: pedidosInfo.total,
       maxima_mora: cliente.maxima_mora,
-      total_vencido: cliente.total_vencido,
+      total_vencido_grave: cliente.total_vencido_grave,
+      num_facturas_grave: cliente.num_facturas_grave,
       severidad: getSeveridad(cliente.maxima_mora) as Exclude<Severidad, "tolerable">,
     });
   }
