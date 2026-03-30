@@ -62,7 +62,7 @@ export function PagosTimeline({
               </Badge>
             )}
           </div>
-          {pagos.length > 10 && (
+          {pagos.length > 0 && (
             <Link
               href={`/pagos?q=${codigoCliente}`}
               className="text-xs text-blue-600 hover:underline"
