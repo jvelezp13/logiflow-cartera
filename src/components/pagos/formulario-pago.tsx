@@ -14,7 +14,12 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, Loader2, AlertCircle, Check, Plus, X } from "lucide-react";
 import { comprimirImagen } from "@/lib/image-compression";
-import { obtenerUrlSubida, extraerDatos, crearPago } from "@/lib/pagos-action";
+import {
+  obtenerUrlSubida,
+  extraerDatos,
+  crearPago,
+  limpiarSoporteHuerfano,
+} from "@/lib/pagos-action";
 import { SelectorFacturas } from "@/components/pagos/selector-facturas";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
 import { type DatosSoporte, MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
@@ -150,13 +155,41 @@ export function FormularioPago({
     null
   );
   const formRef = useRef<HTMLFormElement>(null);
+  const savedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancelar upload en curso si el componente se desmonta
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (actionState?.success) {
+      savedRef.current = true;
       dispatch({ type: "SET_STEP", step: "done" });
       onSuccess?.();
     }
   }, [actionState, onSuccess]);
+
+  // Cleanup: borrar soporte de R2 si el form se desmonta sin guardar
+  useEffect(() => {
+    return () => {
+      if (state.objectKey && !savedRef.current) {
+        limpiarSoporteHuerfano(state.objectKey);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.objectKey]);
+
+  // Warning: prevenir cierre accidental si hay datos sin guardar
+  const hasUnsavedData =
+    state.step === "reviewing" && (state.objectKey || state.montoTotal);
+  useEffect(() => {
+    if (!hasUnsavedData) return;
+    const handler = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedData]);
 
   const handleFileSelect = useCallback(
     async (file: File) => {
@@ -170,6 +203,9 @@ export function FormularioPago({
       }
 
       dispatch({ type: "SET_STEP", step: "uploading" });
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      const { signal } = abortRef.current;
 
       try {
         // Comprimir
@@ -177,6 +213,7 @@ export function FormularioPago({
 
         // Obtener URL de subida
         const urlResult = await obtenerUrlSubida(codigoCliente, file.name);
+        if (signal.aborted) return;
         if (urlResult.error || !urlResult.uploadUrl || !urlResult.objectKey) {
           dispatch({
             type: "SET_ERROR",
@@ -191,6 +228,7 @@ export function FormularioPago({
           method: "PUT",
           body: compressed,
           headers: { "Content-Type": "image/webp" },
+          signal,
         });
 
         if (!uploadRes.ok) {
@@ -578,7 +616,7 @@ export function FormularioPago({
       {/* Selector de facturas */}
       <SelectorFacturas
         facturas={facturas}
-        montoDisponible={parseFloat(state.montoTotal) || 0}
+        montoDisponible={parseInt(state.montoTotal, 10) || 0}
         selected={state.facturasSeleccionadas}
         onChange={(f) => dispatch({ type: "SET_FACTURAS", facturas: f })}
       />

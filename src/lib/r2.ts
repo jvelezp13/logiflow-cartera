@@ -44,7 +44,8 @@ export async function generarUrlSubida(
   nombreArchivo: string
 ): Promise<{ uploadUrl: string; objectKey: string }> {
   const safeName = nombreArchivo.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const objectKey = `${tenantId}/${codigoCliente}/${Date.now()}-${safeName}`;
+  const uid = crypto.randomUUID().slice(0, 8);
+  const objectKey = `${tenantId}/${codigoCliente}/${Date.now()}-${uid}-${safeName}`;
 
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET_NAME,

@@ -102,6 +102,21 @@ export async function extraerDatos(
 }
 
 /**
+ * Elimina un soporte huérfano de R2 (subido pero nunca guardado como pago).
+ */
+export async function limpiarSoporteHuerfano(
+  objectKey: string
+): Promise<void> {
+  try {
+    const profile = await getUserProfile();
+    if (!objectKey.startsWith(`${profile.tenant_id}/`)) return;
+    await eliminarObjeto(objectKey);
+  } catch (e) {
+    logError("limpiarSoporteHuerfano", e);
+  }
+}
+
+/**
  * Genera presigned GET URL para visualizar un soporte.
  */
 export async function obtenerUrlVisualizacion(
@@ -160,7 +175,7 @@ export async function crearPago(
   if (!codigoCliente) return { error: "Cliente es requerido" };
   if (!fechaConsignacion) return { error: "Fecha de consignacion es requerida" };
 
-  const montoTotal = parseFloat(montoTotalStr);
+  const montoTotal = parseInt(montoTotalStr, 10);
   if (!montoTotal || montoTotal <= 0) {
     return { error: "Monto debe ser mayor a 0" };
   }
@@ -176,6 +191,24 @@ export async function crearPago(
     return { error: "Debe seleccionar al menos una factura" };
   }
 
+  // Validar que las facturas pertenezcan al cliente
+  const supabase = await createClient();
+  const facturasNos = facturas.map((f) => f.no_factura);
+  const { data: facturasValidas } = await supabase
+    .from("cartera")
+    .select("no_factura")
+    .eq("tenant_id", profile.tenant_id)
+    .eq("codigo_cliente", codigoCliente)
+    .in("no_factura", facturasNos);
+
+  const validasSet = new Set((facturasValidas || []).map((f) => f.no_factura));
+  const invalidas = facturasNos.filter((n) => !validasSet.has(n));
+  if (invalidas.length > 0) {
+    return {
+      error: `Facturas no pertenecen a este cliente: ${invalidas.join(", ")}`,
+    };
+  }
+
   // Parse vouchers (CSV) — max 4
   const vouchers = vouchersStr
     .split(",")
@@ -187,7 +220,7 @@ export async function crearPago(
   const recaudo = numeroRecaudo ? parseInt(numeroRecaudo, 10) : null;
   const recibo = numeroRecibo ? parseInt(numeroRecibo, 10) : null;
   const valorNotaCredito = valorNotaCreditoStr
-    ? parseFloat(valorNotaCreditoStr)
+    ? parseInt(valorNotaCreditoStr, 10)
     : null;
 
   // Parse AI extraction JSON
@@ -203,9 +236,16 @@ export async function crearPago(
   // Determinar estado
   const estado = recaudo !== null && recibo !== null ? "verificado" : "registrado";
 
-  // --- Insert pago ---
-  const supabase = await createClient();
+  async function cleanupR2() {
+    if (!soporteKey) return;
+    try {
+      await eliminarObjeto(soporteKey);
+    } catch (e) {
+      logError("crearPago:cleanup_r2", e);
+    }
+  }
 
+  // --- Insert pago ---
   const { data: pago, error: pagoError } = await supabase
     .from("pagos")
     .insert({
@@ -234,6 +274,7 @@ export async function crearPago(
 
   if (pagoError) {
     logError("crearPago:insert_pago", pagoError);
+    await cleanupR2();
     return { error: "Error al registrar el pago" };
   }
 
@@ -251,12 +292,15 @@ export async function crearPago(
 
   if (facturasError) {
     logError("crearPago:insert_facturas", facturasError);
-    // Cleanup: eliminar pago huérfano para evitar inconsistencia
-    await supabase
-      .from("pagos")
-      .delete()
-      .eq("id", pago.id)
-      .eq("tenant_id", profile.tenant_id);
+    // Cleanup: eliminar pago huérfano + soporte de R2 en paralelo
+    await Promise.all([
+      supabase
+        .from("pagos")
+        .delete()
+        .eq("id", pago.id)
+        .eq("tenant_id", profile.tenant_id),
+      cleanupR2(),
+    ]);
     return { error: "Error al vincular facturas — pago no fue creado" };
   }
 
