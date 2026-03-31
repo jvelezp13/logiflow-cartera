@@ -40,6 +40,8 @@ export interface PagoActionState {
   voucher_duplicado?: {
     duplicados: VoucherDuplicadoInfo[];
     totalYaAplicado: number;
+    montoNuevoPago: number;
+    montoSoporte: number | null;
   };
 }
 
@@ -354,6 +356,15 @@ export async function crearPago(
         const totalYaAplicado = (duplicados as { monto_total: number }[]).reduce(
           (sum, d) => sum + Number(d.monto_total), 0
         );
+        // Monto del soporte según IA (del pago actual)
+        const datos = (aiExtraction as Record<string, unknown> | null)?.datos as
+          | Record<string, unknown>
+          | undefined;
+        const montoSoporte =
+          datos?.valor_pagado !== undefined && datos.valor_pagado !== null
+            ? Number(datos.valor_pagado)
+            : null;
+
         return {
           voucher_duplicado: {
             duplicados: (duplicados as VoucherDuplicadoInfo[]).map((d) => ({
@@ -363,6 +374,8 @@ export async function crearPago(
               monto_total: Number(d.monto_total),
             })),
             totalYaAplicado,
+            montoNuevoPago: montoTotal,
+            montoSoporte: montoSoporte && !Number.isNaN(montoSoporte) ? montoSoporte : null,
           },
         };
       }

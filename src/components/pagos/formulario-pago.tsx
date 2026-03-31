@@ -706,32 +706,60 @@ export function FormularioPago({
             </DialogDescription>
           </DialogHeader>
 
-          {voucherWarning && (
-            <div className="space-y-3">
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
-                {voucherWarning.duplicados.map((d) => (
-                  <div
-                    key={d.pago_id}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="text-slate-700">
-                      {formatFechaCorta(d.fecha_consignacion)} — Cliente{" "}
-                      {d.codigo_cliente}
+          {voucherWarning && (() => {
+            const nuevoTotal = voucherWarning.totalYaAplicado + voucherWarning.montoNuevoPago;
+            const excede = voucherWarning.montoSoporte !== null && nuevoTotal > voucherWarning.montoSoporte;
+            return (
+              <div className="space-y-3">
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+                  {voucherWarning.duplicados.map((d) => (
+                    <div
+                      key={d.pago_id}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="text-slate-700">
+                        {formatFechaCorta(d.fecha_consignacion)} — Cliente{" "}
+                        {d.codigo_cliente}
+                      </span>
+                      <span className="font-medium text-slate-900">
+                        {formatCurrencyFull(d.monto_total)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1 text-xs">
+                  {voucherWarning.montoSoporte !== null && (
+                    <p className="text-slate-500">
+                      Valor del soporte:{" "}
+                      <span className="font-medium text-slate-700">
+                        {formatCurrencyFull(voucherWarning.montoSoporte)}
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-slate-500">
+                    Ya aplicado:{" "}
+                    <span className="font-medium text-slate-700">
+                      {formatCurrencyFull(voucherWarning.totalYaAplicado)}
                     </span>
-                    <span className="font-medium text-slate-900">
-                      {formatCurrencyFull(d.monto_total)}
+                    {" + "}Este pago:{" "}
+                    <span className="font-medium text-slate-700">
+                      {formatCurrencyFull(voucherWarning.montoNuevoPago)}
                     </span>
-                  </div>
-                ))}
+                    {" = "}
+                    <span className={`font-semibold ${excede ? "text-red-600" : "text-slate-900"}`}>
+                      {formatCurrencyFull(nuevoTotal)}
+                    </span>
+                  </p>
+                  {excede && (
+                    <p className="text-red-600 font-medium">
+                      La suma total excede el valor del soporte por{" "}
+                      {formatCurrencyFull(nuevoTotal - (voucherWarning.montoSoporte ?? 0))}
+                    </p>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Total ya aplicado con este voucher:{" "}
-                <span className="font-medium text-slate-700">
-                  {formatCurrencyFull(voucherWarning.totalYaAplicado)}
-                </span>
-              </p>
-            </div>
-          )}
+            );
+          })()}
 
           <DialogFooter>
             <Button
