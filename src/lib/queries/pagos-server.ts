@@ -33,6 +33,7 @@ export interface PagoResumen {
   confianza_nivel: string | null;
   tipo_documento: string | null;
   origen: string | null;
+  ai_metadata: AiMetadata | null;
   facturas: PagoFactura[];
 }
 
@@ -83,6 +84,16 @@ export interface HistorialEntry {
   created_at: string;
 }
 
+export interface AiMetadata {
+  confianza_nivel: string | null;
+  confianza_notas: string | null;
+  tipo_documento: string | null;
+  origen: string | null;
+  observaciones: string | null;
+  datos: Record<string, unknown> | null;
+  audit: Record<string, unknown> | null;
+}
+
 export interface FacturaAbierta {
   no_factura: string;
   fecha_vencimiento: string | null;
@@ -106,6 +117,21 @@ function extractAiMeta(aiExtraction: unknown): {
     confianza_nivel: (confianza?.nivel as string) ?? null,
     tipo_documento: (ai.tipo_documento as string) ?? null,
     origen: (ai.origen as string) ?? null,
+  };
+}
+
+function extractAiMetadata(aiExtraction: unknown): AiMetadata | null {
+  if (!aiExtraction || typeof aiExtraction !== "object") return null;
+  const ai = aiExtraction as Record<string, unknown>;
+  const confianza = ai.confianza as Record<string, unknown> | undefined;
+  return {
+    confianza_nivel: (confianza?.nivel as string) ?? null,
+    confianza_notas: (confianza?.notas as string) ?? null,
+    tipo_documento: (ai.tipo_documento as string) ?? null,
+    origen: (ai.origen as string) ?? null,
+    observaciones: (ai.observaciones as string) ?? null,
+    datos: (ai.datos as Record<string, unknown>) ?? null,
+    audit: (ai._audit as Record<string, unknown>) ?? null,
   };
 }
 
@@ -169,6 +195,7 @@ export async function getPagosCliente(
       valor_nota_credito: row.valor_nota_credito != null ? Number(row.valor_nota_credito) : null,
       editado: row.editado ?? false,
       ...aiMeta,
+      ai_metadata: extractAiMetadata(row.ai_extraction),
       facturas: (
         (row.pago_facturas as PagoFactura[] | null) || []
       ).map((f) => ({
@@ -319,6 +346,7 @@ export async function getPagosPaginados(
           : null,
         editado: row.editado ?? false,
         ...aiMeta,
+        ai_metadata: extractAiMetadata(row.ai_extraction),
         facturas: (
           (row.pago_facturas as PagoFactura[] | null) || []
         ).map((f) => ({
@@ -379,6 +407,7 @@ export async function getPagoDetalle(
       : null,
     editado: data.editado ?? false,
     ...extractAiMeta(data.ai_extraction),
+    ai_metadata: extractAiMetadata(data.ai_extraction),
     estado: data.estado,
     soporte_key: data.soporte_key,
     soporte_url_firmada: soporteUrlFirmada,
