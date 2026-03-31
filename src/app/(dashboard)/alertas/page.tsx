@@ -17,12 +17,12 @@ import type {
   ClienteCupoAlerta,
   ClienteCupoOcioso,
   ClienteInactivo,
-  NovedadSync,
 } from "@/lib/queries/alertas-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { formatCurrencyFull } from "@/lib/format";
 import { AlertasFiltros } from "@/components/alertas/alertas-filtros";
+import { TablaNovedades } from "@/components/alertas/tabla-novedades";
 import Link from "next/link";
 
 // Modos validos
@@ -116,35 +116,12 @@ function getDiasBadge(dias: number | null) {
   return { classes: "bg-slate-100 text-slate-700", label: `${dias}d` };
 }
 
-// Formato fecha corta (dd/mm hh:mm)
-function formatFechaCorta(fecha: string): string {
-  const d = new Date(fecha);
-  return d.toLocaleDateString("es-CO", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 // Formato fecha solo dia (dd/mm/aa)
 function formatFechaDia(fecha: string | null): string {
   if (!fecha) return "-";
   const d = new Date(fecha + "T00:00:00");
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
-
-// Categoria y color de tipo de novedad
-function getTipoBadge(tipo: string) {
-  const config: Record<string, { label: string; classes: string }> = {
-    cartera_factura_pagada: { label: "Pago", classes: "bg-green-100 text-green-700" },
-    cupo_cambio: { label: "Cupo", classes: "bg-blue-100 text-blue-700" },
-    credito_activado: { label: "Credito", classes: "bg-blue-100 text-blue-700" },
-    plazo_cambio: { label: "Plazo", classes: "bg-amber-100 text-amber-700" },
-    cartera_deuda_creciente: { label: "Deuda", classes: "bg-slate-100 text-slate-700" },
-    cartera_cliente_nuevo: { label: "Nuevo", classes: "bg-slate-100 text-slate-700" },
-  };
-  return config[tipo] || { label: tipo, classes: "bg-slate-100 text-slate-700" };
 }
 
 // Mensaje vacio reutilizable
@@ -347,50 +324,3 @@ function TablaInactivos({ clientes }: { clientes: ClienteInactivo[] }) {
   );
 }
 
-function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs py-2 w-32">Fecha</TableHead>
-          <TableHead className="text-xs py-2 w-28">Tipo</TableHead>
-          <TableHead className="text-xs py-2">Mensaje</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {novedades.length === 0 ? (
-          <MensajeVacio texto="No hay novedades en los ultimos 30 dias" colSpan={3} />
-        ) : (
-          novedades.map((n) => {
-            const badge = getTipoBadge(n.tipo);
-            return (
-              <TableRow key={n.id} className="hover:bg-slate-100/60">
-                <TableCell className="text-xs text-slate-500 tabular-nums py-1.5">
-                  {formatFechaCorta(n.created_at)}
-                </TableCell>
-                <TableCell className="py-1.5">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.classes}`}
-                  >
-                    {badge.label}
-                  </span>
-                </TableCell>
-                <TableCell className="text-sm py-1.5">
-                  <div>{n.mensaje || "-"}</div>
-                  {n.referencia && (
-                    <Link
-                      href={`/clientes/${n.referencia}`}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      {n.referencia}
-                    </Link>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })
-        )}
-      </TableBody>
-    </Table>
-  );
-}

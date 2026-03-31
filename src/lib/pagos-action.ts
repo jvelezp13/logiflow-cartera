@@ -211,6 +211,8 @@ export async function crearPago(
     return { error: "Monto debe ser mayor a 0" };
   }
 
+  const esRetroactivo = formData.get("retroactivo") === "true";
+
   let facturas: FacturaInput[] = [];
   try {
     facturas = JSON.parse(facturasStr || "[]");
@@ -218,46 +220,53 @@ export async function crearPago(
     return { error: "Formato de facturas invalido" };
   }
 
-  if (facturas.length === 0) {
-    return { error: "Debe seleccionar al menos una factura" };
-  }
+  // Pago retroactivo: factura ya no existe en cartera (fue liquidada en CRM)
+  // Solo requiere monto — facturas son referencia, no se validan contra cartera
+  if (!esRetroactivo) {
+    if (facturas.length === 0) {
+      return { error: "Debe seleccionar al menos una factura" };
+    }
 
-  const sumaAplicada = facturas.reduce((sum, f) => sum + f.valor_aplicado, 0);
-  const diferenciaMonto = Math.abs(montoTotal - sumaAplicada);
+    const sumaAplicada = facturas.reduce((sum, f) => sum + f.valor_aplicado, 0);
+    const diferenciaMonto = Math.abs(montoTotal - sumaAplicada);
 
-  if (diferenciaMonto > UMBRAL_REDONDEO_PAGO) {
-    return {
-      error: `La suma aplicada (${formatCurrencyFull(sumaAplicada)}) difiere del monto total (${formatCurrencyFull(montoTotal)}) por más de $1.000`,
-    };
+    if (diferenciaMonto > UMBRAL_REDONDEO_PAGO) {
+      return {
+        error: `La suma aplicada (${formatCurrencyFull(sumaAplicada)}) difiere del monto total (${formatCurrencyFull(montoTotal)}) por más de $1.000`,
+      };
+    }
   }
 
   const supabase = await createClient();
-  const facturasNos = facturas.map((f) => f.no_factura);
-  const { data: facturasValidas } = await supabase
-    .from("cartera")
-    .select("no_factura, total")
-    .eq("tenant_id", profile.tenant_id)
-    .eq("codigo_cliente", codigoCliente)
-    .in("no_factura", facturasNos);
 
-  const carteraMap = new Map(
-    (facturasValidas || []).map((f) => [f.no_factura, Number(f.total)])
-  );
-  const invalidas = facturasNos.filter((n) => !carteraMap.has(n));
-  if (invalidas.length > 0) {
-    return {
-      error: `Facturas no pertenecen a este cliente: ${invalidas.join(", ")}`,
-    };
-  }
+  if (!esRetroactivo && facturas.length > 0) {
+    const facturasNos = facturas.map((f) => f.no_factura);
+    const { data: facturasValidas } = await supabase
+      .from("cartera")
+      .select("no_factura, total")
+      .eq("tenant_id", profile.tenant_id)
+      .eq("codigo_cliente", codigoCliente)
+      .in("no_factura", facturasNos);
 
-  const sobreAplicadas = facturas.filter((f) => {
-    const totalFactura = carteraMap.get(f.no_factura);
-    return totalFactura !== undefined && f.valor_aplicado > totalFactura;
-  });
-  if (sobreAplicadas.length > 0) {
-    return {
-      error: `Valor aplicado excede el saldo de: ${sobreAplicadas.map((f) => f.no_factura).join(", ")}`,
-    };
+    const carteraMap = new Map(
+      (facturasValidas || []).map((f) => [f.no_factura, Number(f.total)])
+    );
+    const invalidas = facturasNos.filter((n) => !carteraMap.has(n));
+    if (invalidas.length > 0) {
+      return {
+        error: `Facturas no pertenecen a este cliente: ${invalidas.join(", ")}`,
+      };
+    }
+
+    const sobreAplicadas = facturas.filter((f) => {
+      const totalFactura = carteraMap.get(f.no_factura);
+      return totalFactura !== undefined && f.valor_aplicado > totalFactura;
+    });
+    if (sobreAplicadas.length > 0) {
+      return {
+        error: `Valor aplicado excede el saldo de: ${sobreAplicadas.map((f) => f.no_factura).join(", ")}`,
+      };
+    }
   }
 
   const vouchers = parseVouchers(vouchersStr);
@@ -323,9 +332,12 @@ export async function crearPago(
       audit.medio_pago_modificado = medioPago !== null && medioPago !== aiMedio;
     }
 
+    if (esRetroactivo) audit.pago_retroactivo = true;
     aiExtraction = { ...aiExtraction, _audit: audit };
   } else {
-    aiExtraction = { _audit: { data_origin: "manual" } };
+    const manualAudit: Record<string, unknown> = { data_origin: "manual" };
+    if (esRetroactivo) manualAudit.pago_retroactivo = true;
+    aiExtraction = { _audit: manualAudit };
   }
 
   // Voucher duplicado: detectar si algún voucher ya fue usado en otro pago
