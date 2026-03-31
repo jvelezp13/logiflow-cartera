@@ -12,10 +12,21 @@ import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
 
 // --- Types ---
 
+export interface VoucherDuplicadoInfo {
+  pago_id: string;
+  codigo_cliente: string;
+  fecha_consignacion: string;
+  monto_total: number;
+}
+
 export interface PagoActionState {
   error?: string;
   success?: boolean;
   pagoId?: string;
+  voucher_duplicado?: {
+    duplicados: VoucherDuplicadoInfo[];
+    totalYaAplicado: number;
+  };
 }
 
 export interface UrlSubidaResult {
@@ -290,6 +301,45 @@ export async function crearPago(
     aiExtraction = { _audit: { data_origin: "manual" } };
   }
 
+  // Voucher duplicado: detectar si algún voucher ya fue usado en otro pago
+  if (vouchers.length > 0) {
+    const voucherAceptado = formData.get("voucher_duplicado_aceptado") === "true";
+
+    const { data: duplicados } = await supabase.rpc(
+      "detectar_vouchers_duplicados",
+      { p_tenant_id: profile.tenant_id, p_vouchers: vouchers }
+    );
+
+    if (duplicados && duplicados.length > 0) {
+      if (!voucherAceptado) {
+        const totalYaAplicado = (duplicados as { monto_total: number }[]).reduce(
+          (sum, d) => sum + Number(d.monto_total), 0
+        );
+        return {
+          voucher_duplicado: {
+            duplicados: (duplicados as VoucherDuplicadoInfo[]).map((d) => ({
+              pago_id: d.pago_id,
+              codigo_cliente: d.codigo_cliente,
+              fecha_consignacion: String(d.fecha_consignacion),
+              monto_total: Number(d.monto_total),
+            })),
+            totalYaAplicado,
+          },
+        };
+      }
+      // Usuario aceptó — marcar en auditoría
+      const audit = (aiExtraction as Record<string, unknown>)?._audit as
+        | Record<string, unknown>
+        | undefined;
+      if (audit) {
+        audit.voucher_compartido = true;
+        audit.pagos_relacionados = (duplicados as { pago_id: string }[]).map(
+          (d) => d.pago_id
+        );
+      }
+    }
+  }
+
   // Determinar estado
   const estado = recaudo !== null && recibo !== null ? "verificado" : "registrado";
 
@@ -476,6 +526,203 @@ export async function eliminarPago(
   }
 
   revalidatePath(`/clientes/${pago.codigo_cliente}`);
+  revalidatePath("/pagos");
+  return { success: true };
+}
+
+// --- Campos editables y helpers de historial ---
+
+const CAMPOS_EDITABLES = [
+  "fecha_consignacion",
+  "monto_total",
+  "medio_pago",
+  "vouchers",
+  "observaciones",
+  "nota_credito",
+  "valor_nota_credito",
+] as const;
+
+type CampoEditable = (typeof CAMPOS_EDITABLES)[number];
+
+function serializarCampo(campo: CampoEditable, valor: unknown): string {
+  if (valor === null || valor === undefined) return "";
+  if (campo === "vouchers" && Array.isArray(valor)) return valor.join(",");
+  return String(valor);
+}
+
+/**
+ * Edita campos de un pago existente con registro de auditoría.
+ */
+export async function editarPago(
+  pagoId: string,
+  cambios: Partial<Record<CampoEditable, unknown>>
+): Promise<PagoActionState> {
+  const profile = await getUserProfile();
+  if (profile.role === "viewer") {
+    return { error: "No tienes permiso para editar pagos" };
+  }
+
+  const supabase = await createClient();
+
+  // Leer pago actual
+  const { data: actual, error: readError } = await supabase
+    .from("pagos")
+    .select("*")
+    .eq("id", pagoId)
+    .eq("tenant_id", profile.tenant_id)
+    .single();
+
+  if (readError || !actual) {
+    return { error: "Pago no encontrado" };
+  }
+
+  // Validaciones
+  if (cambios.fecha_consignacion) {
+    const fecha = String(cambios.fecha_consignacion);
+    const hoy = new Date().toISOString().slice(0, 10);
+    const haceUnAno = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+    if (fecha > hoy) return { error: "Fecha no puede ser futura" };
+    if (fecha < haceUnAno) return { error: "Fecha no puede ser mayor a 1 año" };
+  }
+
+  if (cambios.monto_total !== undefined) {
+    const monto = Number(cambios.monto_total);
+    if (!monto || monto <= 0) return { error: "Monto debe ser mayor a 0" };
+  }
+
+  // Detectar campos que realmente cambiaron
+  const historialInserts: {
+    pago_id: string;
+    campo: string;
+    valor_anterior: string;
+    valor_nuevo: string;
+    modificado_por: string;
+  }[] = [];
+
+  const updateData: Record<string, unknown> = {};
+
+  for (const campo of CAMPOS_EDITABLES) {
+    if (!(campo in cambios)) continue;
+    const anterior = serializarCampo(campo, actual[campo]);
+    const nuevo = serializarCampo(campo, cambios[campo]);
+    if (anterior === nuevo) continue;
+
+    historialInserts.push({
+      pago_id: pagoId,
+      campo,
+      valor_anterior: anterior,
+      valor_nuevo: nuevo,
+      modificado_por: profile.id,
+    });
+
+    if (campo === "vouchers") {
+      updateData[campo] = String(cambios[campo] || "")
+        .split(",")
+        .map((v: string) => v.trim())
+        .filter(Boolean)
+        .slice(0, 4);
+    } else {
+      updateData[campo] = cambios[campo] ?? null;
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { success: true };
+  }
+
+  // Update pago
+  const { error: updateError } = await supabase
+    .from("pagos")
+    .update(updateData)
+    .eq("id", pagoId)
+    .eq("tenant_id", profile.tenant_id);
+
+  if (updateError) {
+    logError("editarPago:update", updateError);
+    return { error: "Error al actualizar el pago" };
+  }
+
+  // Insert historial
+  if (historialInserts.length > 0) {
+    const { error: histError } = await supabase
+      .from("pagos_historial")
+      .insert(historialInserts);
+    if (histError) logError("editarPago:historial", histError);
+  }
+
+  revalidatePath(`/clientes/${actual.codigo_cliente}`);
+  revalidatePath("/pagos");
+  return { success: true };
+}
+
+/**
+ * Reemplaza el soporte de un pago existente.
+ * El cliente ya subió el nuevo archivo a R2 — solo actualiza el pago.
+ */
+export async function reemplazarSoporte(
+  pagoId: string,
+  nuevoSoporteKey: string,
+  nuevoSoporteNombre: string
+): Promise<PagoActionState> {
+  const profile = await getUserProfile();
+  if (profile.role === "viewer") {
+    return { error: "No tienes permiso" };
+  }
+
+  if (!nuevoSoporteKey.startsWith(`${profile.tenant_id}/`)) {
+    return { error: "No tienes acceso a este recurso" };
+  }
+
+  const supabase = await createClient();
+
+  const { data: actual, error: readError } = await supabase
+    .from("pagos")
+    .select("soporte_key, codigo_cliente")
+    .eq("id", pagoId)
+    .eq("tenant_id", profile.tenant_id)
+    .single();
+
+  if (readError || !actual) {
+    return { error: "Pago no encontrado" };
+  }
+
+  const viejoKey = actual.soporte_key;
+
+  // Update con nuevo soporte
+  const { error: updateError } = await supabase
+    .from("pagos")
+    .update({
+      soporte_key: nuevoSoporteKey,
+      soporte_url: `r2://${nuevoSoporteKey}`,
+      soporte_nombre: nuevoSoporteNombre,
+    })
+    .eq("id", pagoId)
+    .eq("tenant_id", profile.tenant_id);
+
+  if (updateError) {
+    logError("reemplazarSoporte:update", updateError);
+    return { error: "Error al actualizar soporte" };
+  }
+
+  // Historial
+  await supabase.from("pagos_historial").insert({
+    pago_id: pagoId,
+    campo: "soporte",
+    valor_anterior: viejoKey || "",
+    valor_nuevo: nuevoSoporteKey,
+    modificado_por: profile.id,
+  });
+
+  // Borrar viejo de R2 (best-effort)
+  if (viejoKey) {
+    try {
+      await eliminarObjeto(viejoKey);
+    } catch (e) {
+      logError("reemplazarSoporte:r2_cleanup", e);
+    }
+  }
+
+  revalidatePath(`/clientes/${actual.codigo_cliente}`);
   revalidatePath("/pagos");
   return { success: true };
 }

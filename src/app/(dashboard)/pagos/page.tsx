@@ -20,6 +20,7 @@ import { FiltrosPagos } from "@/components/pagos/filtros-pagos";
 import { Paginacion } from "@/components/paginacion";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { CodigosCRMForm } from "@/components/pagos/codigos-crm-form";
+import { EditarPagoDialog } from "@/components/pagos/editar-pago-dialog";
 import { MessageSquare } from "lucide-react";
 
 import Link from "next/link";
@@ -82,12 +83,15 @@ export default async function PagosPage({
                   <TableHead className="text-xs py-2">Facturas</TableHead>
                   <TableHead className="text-xs py-2 text-center">Estado CRM</TableHead>
                   <TableHead className="text-xs py-2 text-center">Soporte</TableHead>
+                  {profile.role !== "viewer" && (
+                    <TableHead className="text-xs py-2 w-10" />
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pagos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={profile.role !== "viewer" ? 9 : 8} className="text-center py-8 text-slate-500">
                       No se encontraron pagos
                     </TableCell>
                   </TableRow>
@@ -209,6 +213,11 @@ export default async function PagosPage({
                             )}
                           </div>
                         </TableCell>
+                        {profile.role !== "viewer" && (
+                          <TableCell className="py-1.5">
+                            <EditarPagoDialog pago={pago} />
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })

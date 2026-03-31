@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useActionState, useRef, useEffect, useCallback } from "react";
+import { useReducer, useActionState, useRef, useEffect, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +12,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Upload, Loader2, AlertCircle, Check, Plus, X } from "lucide-react";
 import { comprimirImagen } from "@/lib/image-compression";
 import {
@@ -19,7 +27,9 @@ import {
   extraerDatos,
   crearPago,
   limpiarSoporteHuerfano,
+  type PagoActionState,
 } from "@/lib/pagos-action";
+import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import { SelectorFacturas } from "@/components/pagos/selector-facturas";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
 import { type DatosSoporte, MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
@@ -154,6 +164,9 @@ export function FormularioPago({
     crearPago,
     null
   );
+  const [voucherWarning, setVoucherWarning] = useState<
+    PagoActionState["voucher_duplicado"] | null
+  >(null);
   const formRef = useRef<HTMLFormElement>(null);
   const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -168,6 +181,9 @@ export function FormularioPago({
       savedRef.current = true;
       dispatch({ type: "SET_STEP", step: "done" });
       onSuccess?.();
+    }
+    if (actionState?.voucher_duplicado) {
+      setVoucherWarning(actionState.voucher_duplicado);
     }
   }, [actionState, onSuccess]);
 
@@ -356,6 +372,11 @@ export function FormularioPago({
         type="hidden"
         name="vouchers"
         value={state.vouchers.filter(Boolean).join(",")}
+      />
+      <input
+        type="hidden"
+        name="voucher_duplicado_aceptado"
+        value={voucherWarning ? "true" : ""}
       />
 
       {/* Error/warning banner */}
@@ -664,6 +685,76 @@ export function FormularioPago({
       {actionState?.error && !actionState.success && (
         <p className="text-xs text-red-600">{actionState.error}</p>
       )}
+
+      {/* Voucher duplicado warning dialog */}
+      <Dialog
+        open={!!voucherWarning}
+        onOpenChange={(open) => {
+          if (!open) setVoucherWarning(null);
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              Voucher ya utilizado
+            </DialogTitle>
+            <DialogDescription>
+              {state.vouchers.filter(Boolean).length === 1
+                ? `El voucher ${state.vouchers.filter(Boolean)[0]} ya fue utilizado en otro pago.`
+                : `Los vouchers ingresados ya fueron utilizados en otro pago.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {voucherWarning && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+                {voucherWarning.duplicados.map((d) => (
+                  <div
+                    key={d.pago_id}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="text-slate-700">
+                      {formatFechaCorta(d.fecha_consignacion)} — Cliente{" "}
+                      {d.codigo_cliente}
+                    </span>
+                    <span className="font-medium text-slate-900">
+                      {formatCurrencyFull(d.monto_total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                Total ya aplicado con este voucher:{" "}
+                <span className="font-medium text-slate-700">
+                  {formatCurrencyFull(voucherWarning.totalYaAplicado)}
+                </span>
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setVoucherWarning(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => {
+                // voucherWarning stays truthy so the hidden input sends "true"
+                // requestSubmit triggers the form action with the flag set
+                formRef.current?.requestSubmit();
+              }}
+            >
+              Continuar de todos modos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

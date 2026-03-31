@@ -27,13 +27,13 @@ export interface PagoResumen {
   codigo_cliente: string | null;
   nombre_cliente: string | null;
   observaciones: string | null;
+  nota_credito: string | null;
+  valor_nota_credito: number | null;
   facturas: PagoFactura[];
 }
 
 export interface PagoDetalle extends PagoResumen {
   codigo_cliente: string;
-  nota_credito: string | null;
-  valor_nota_credito: number | null;
   soporte_url_firmada: string | null;
   ai_extraction: unknown;
   importado_historico: boolean;
@@ -101,7 +101,7 @@ export async function getPagosCliente(
   const { data, error } = await supabase
     .from("pagos")
     .select(
-      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, estado, soporte_key, created_at, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)"
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, nota_credito, valor_nota_credito, estado, soporte_key, created_at, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)"
     )
     .eq("tenant_id", tenantId)
     .eq("codigo_cliente", codigoCliente)
@@ -124,7 +124,9 @@ export async function getPagosCliente(
       created_by_name: extractProfileName(row.profiles as ProfilesJoin),
       codigo_cliente: null,
       nombre_cliente: null,
-      observaciones: null,
+      observaciones: row.observaciones as string | null,
+      nota_credito: (row.nota_credito as string | null) ?? null,
+      valor_nota_credito: row.valor_nota_credito != null ? Number(row.valor_nota_credito) : null,
       facturas: (
         (row.pago_facturas as PagoFactura[] | null) || []
       ).map((f) => ({
@@ -181,7 +183,7 @@ export async function getPagosPaginados(
   let query = supabase
     .from("pagos")
     .select(
-      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, estado, soporte_key, created_at, codigo_cliente, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, nota_credito, valor_nota_credito, estado, soporte_key, created_at, codigo_cliente, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
       { count: "exact" }
     )
     .eq("tenant_id", tenantId);
@@ -252,6 +254,8 @@ export async function getPagosPaginados(
       numero_recaudo: row.numero_recaudo,
       numero_recibo: row.numero_recibo,
       observaciones: row.observaciones as string | null,
+      nota_credito: (row.nota_credito as string | null) ?? null,
+      valor_nota_credito: row.valor_nota_credito != null ? Number(row.valor_nota_credito) : null,
       estado: row.estado,
       soporte_key: row.soporte_key,
       created_at: row.created_at,
