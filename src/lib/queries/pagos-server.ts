@@ -45,7 +45,9 @@ export type FiltroAuditoria =
   | "monto_modificado"
   | "manual"
   | "sin_conciliar"
-  | "discrepancia";
+  | "discrepancia"
+  | "voucher_compartido"
+  | "voucher_modificado";
 
 export interface PagosFilters {
   busqueda?: string;
@@ -60,6 +62,8 @@ export interface PagosAuditCounts {
   ingresoManual: number;
   sinConciliar: number;
   conDiscrepancia: number;
+  voucherCompartido: number;
+  voucherModificado: number;
 }
 
 export interface FacturaAbierta {
@@ -203,6 +207,10 @@ export async function getPagosPaginados(
     query = query.filter("ai_extraction->_audit->>monto_modificado", "eq", "true");
   } else if (filters.filtro === "manual") {
     query = query.filter("ai_extraction->_audit->>data_origin", "eq", "manual");
+  } else if (filters.filtro === "voucher_compartido") {
+    query = query.filter("ai_extraction->_audit->>voucher_compartido", "eq", "true");
+  } else if (filters.filtro === "voucher_modificado") {
+    query = query.filter("ai_extraction->_audit->>voucher_modificado", "eq", "true");
   } else if (needsConciliacion && conciliacionIds !== null) {
     if (conciliacionIds.length === 0) {
       return { pagos: [], total: 0 };
@@ -351,7 +359,7 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
   const supabase = await createClient();
 
   // get_pagos_conciliacion devuelve ambos conteos en UNA sola llamada
-  const [sinCRMResult, montoModResult, manualResult, conciliacionResult] =
+  const [sinCRMResult, montoModResult, manualResult, conciliacionResult, voucherCompResult, voucherModResult] =
     await Promise.all([
       supabase
         .from("pagos")
@@ -372,11 +380,25 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
         .filter("ai_extraction->_audit->>data_origin", "eq", "manual"),
 
       supabase.rpc("get_pagos_conciliacion", { p_tenant_id: tenantId }),
+
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("ai_extraction->_audit->>voucher_compartido", "eq", "true"),
+
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("ai_extraction->_audit->>voucher_modificado", "eq", "true"),
     ]);
 
   if (sinCRMResult.error) throw sinCRMResult.error;
   if (montoModResult.error) throw montoModResult.error;
   if (manualResult.error) throw manualResult.error;
+  if (voucherCompResult.error) throw voucherCompResult.error;
+  if (voucherModResult.error) throw voucherModResult.error;
   // Fallback a 0 solo si la RPC no existe aún (PGRST202); otros errores deben propagarse
   if (conciliacionResult.error && conciliacionResult.error.code !== "PGRST202") {
     throw conciliacionResult.error;
@@ -395,6 +417,8 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
     ingresoManual: manualResult.count || 0,
     sinConciliar: Number(conciliacionRow?.sin_conciliar ?? 0),
     conDiscrepancia: Number(conciliacionRow?.con_discrepancia ?? 0),
+    voucherCompartido: voucherCompResult.count || 0,
+    voucherModificado: voucherModResult.count || 0,
   };
 }
 

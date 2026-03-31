@@ -161,6 +161,22 @@ export function FiltrosPagos({ total, auditCounts }: FiltrosPagosProps) {
           colorInactive="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
           colorActive="bg-purple-100 text-purple-800 border-purple-300"
         />
+        <AuditCapsule
+          count={auditCounts.voucherCompartido}
+          label="voucher compartido"
+          active={filtro === "voucher_compartido"}
+          onClick={() => toggleFiltro("voucher_compartido")}
+          colorInactive="bg-cyan-50 text-cyan-600 border-cyan-200 hover:bg-cyan-100"
+          colorActive="bg-cyan-100 text-cyan-800 border-cyan-300"
+        />
+        <AuditCapsule
+          count={auditCounts.voucherModificado}
+          label="voucher modificado"
+          active={filtro === "voucher_modificado"}
+          onClick={() => toggleFiltro("voucher_modificado")}
+          colorInactive="bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100"
+          colorActive="bg-teal-100 text-teal-800 border-teal-300"
+        />
       </div>
     </div>
   );

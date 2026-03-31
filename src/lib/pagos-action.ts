@@ -287,15 +287,27 @@ export async function crearPago(
         ? Number(datos.valor_pagado)
         : null;
 
-    const audit =
-      aiMonto !== null && !Number.isNaN(aiMonto) && aiMonto > 0
-        ? {
-            monto_ia: aiMonto,
-            monto_usuario: montoTotal,
-            monto_modificado: Math.abs(montoTotal - aiMonto) / aiMonto > 0.05,
-            data_origin: "ai_assisted" as const,
-          }
-        : { data_origin: "ai_assisted" as const };
+    const aiVoucher =
+      datos?.numero_voucher !== undefined && datos.numero_voucher !== null
+        ? String(datos.numero_voucher)
+        : null;
+
+    const audit: Record<string, unknown> = {
+      data_origin: "ai_assisted" as const,
+    };
+
+    if (aiMonto !== null && !Number.isNaN(aiMonto) && aiMonto > 0) {
+      audit.monto_ia = aiMonto;
+      audit.monto_usuario = montoTotal;
+      audit.monto_modificado = Math.abs(montoTotal - aiMonto) / aiMonto > 0.05;
+    }
+
+    if (aiVoucher) {
+      const userVoucher = vouchers[0] || null;
+      audit.voucher_ia = aiVoucher;
+      audit.voucher_usuario = userVoucher;
+      audit.voucher_modificado = userVoucher !== null && userVoucher !== aiVoucher;
+    }
 
     aiExtraction = { ...aiExtraction, _audit: audit };
   } else {
