@@ -255,6 +255,16 @@ export default async function DetalleClientePage({
                     );
                   })
                 )}
+                {facturas.length > 0 && (
+                  <TableRow className="bg-slate-50 font-semibold">
+                    <TableCell colSpan={5} className="py-2 text-sm text-right text-slate-600">
+                      Subtotal
+                    </TableCell>
+                    <TableCell className="py-2 text-sm tabular-nums text-right">
+                      {formatCurrencyFull(facturas.reduce((sum, f) => sum + f.total, 0))}
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>

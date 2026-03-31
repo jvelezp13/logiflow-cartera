@@ -7,6 +7,26 @@ import { getTenantId } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { RANGOS_MORA, getSeveridad, type Severidad } from "@/lib/severity";
 
+function buildRangoOrFilter(
+  rangoParam: string,
+  moraColumn: string
+): string | null {
+  const values = rangoParam.split(",").filter(Boolean);
+  const valid = values.filter(
+    (v) => v in RANGOS_MORA
+  ) as (keyof typeof RANGOS_MORA)[];
+  if (valid.length === 0) return null;
+
+  const conditions = valid.map((v) => {
+    const [min, max] = RANGOS_MORA[v];
+    if (min === -Infinity) return `${moraColumn}.lte.${max}`;
+    if (max === Infinity) return `${moraColumn}.gte.${min}`;
+    return `and(${moraColumn}.gte.${min},${moraColumn}.lte.${max})`;
+  });
+
+  return conditions.length === 1 ? conditions[0] : conditions.join(",");
+}
+
 // --- Tipos ---
 
 export interface DashboardKPIs {
@@ -290,16 +310,9 @@ export async function getFacturasConFiltros(options?: {
     query = query.gt("mora", 20);
   }
 
-  // Filtro por rango de envejecimiento
-  if (options?.rango && RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA]) {
-    const [min, max] = RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA];
-    if (min === -Infinity) {
-      query = query.lte("mora", max);
-    } else if (max === Infinity) {
-      query = query.gte("mora", min);
-    } else {
-      query = query.gte("mora", min).lte("mora", max);
-    }
+  if (options?.rango) {
+    const orFilter = buildRangoOrFilter(options.rango, "mora");
+    if (orFilter) query = query.or(orFilter);
   }
 
   const { data, error, count } = await query
@@ -362,16 +375,9 @@ export async function getClientesConSaldo(options?: {
     query = query.gt("maxima_mora", 20);
   }
 
-  // Filtro por rango de envejecimiento
-  if (options?.rango && RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA]) {
-    const [min, max] = RANGOS_MORA[options.rango as keyof typeof RANGOS_MORA];
-    if (min === -Infinity) {
-      query = query.lte("maxima_mora", max);
-    } else if (max === Infinity) {
-      query = query.gte("maxima_mora", min);
-    } else {
-      query = query.gte("maxima_mora", min).lte("maxima_mora", max);
-    }
+  if (options?.rango) {
+    const orFilter = buildRangoOrFilter(options.rango, "maxima_mora");
+    if (orFilter) query = query.or(orFilter);
   }
 
   const { data, error, count } = await query
