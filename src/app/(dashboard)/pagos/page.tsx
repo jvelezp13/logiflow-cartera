@@ -21,7 +21,7 @@ import { Paginacion } from "@/components/paginacion";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { CodigosCRMForm } from "@/components/pagos/codigos-crm-form";
 import { EditarPagoDialog } from "@/components/pagos/editar-pago-dialog";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, History, AlertTriangle } from "lucide-react";
 
 import Link from "next/link";
 
@@ -116,8 +116,18 @@ export default async function PagosPage({
                           )}
                         </TableCell>
                         <TableCell className="py-1.5">
-                          <div className="text-sm tabular-nums">
+                          <div className="text-sm tabular-nums flex items-center gap-1">
                             {pago.created_at ? formatFechaCorta(pago.created_at.slice(0, 10)) : "—"}
+                            {pago.editado && (
+                              <span title="Editado" className="text-blue-500">
+                                <History className="h-3 w-3" />
+                              </span>
+                            )}
+                            {pago.confianza_nivel === "bajo" && (
+                              <span title="Confianza IA baja" className="text-rose-500">
+                                <AlertTriangle className="h-3 w-3" />
+                              </span>
+                            )}
                           </div>
                           {pago.created_by_name && (
                             <div className="text-xs text-slate-400 mt-0.5">
@@ -148,6 +158,11 @@ export default async function PagosPage({
                           <div className="text-xs text-slate-400 tabular-nums mt-0.5">
                             {formatFechaCorta(pago.fecha_consignacion)}
                           </div>
+                          {pago.tipo_documento && (
+                            <div className="text-xs text-slate-300 mt-0.5 truncate max-w-[120px]" title={`${pago.tipo_documento}${pago.origen ? ` — ${pago.origen}` : ""}`}>
+                              {pago.tipo_documento}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="py-1.5">
                           {pago.facturas.length === 0 ? (

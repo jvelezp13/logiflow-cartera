@@ -29,6 +29,10 @@ export interface PagoResumen {
   observaciones: string | null;
   nota_credito: string | null;
   valor_nota_credito: number | null;
+  editado: boolean;
+  confianza_nivel: string | null;
+  tipo_documento: string | null;
+  origen: string | null;
   facturas: PagoFactura[];
 }
 
@@ -47,7 +51,9 @@ export type FiltroAuditoria =
   | "sin_conciliar"
   | "discrepancia"
   | "voucher_compartido"
-  | "voucher_modificado";
+  | "voucher_modificado"
+  | "editado"
+  | "confianza_baja";
 
 export interface PagosFilters {
   busqueda?: string;
@@ -64,6 +70,8 @@ export interface PagosAuditCounts {
   conDiscrepancia: number;
   voucherCompartido: number;
   voucherModificado: number;
+  editado: number;
+  confianzaBaja: number;
 }
 
 export interface FacturaAbierta {
@@ -74,6 +82,23 @@ export interface FacturaAbierta {
 }
 
 // --- Helpers ---
+
+function extractAiMeta(aiExtraction: unknown): {
+  confianza_nivel: string | null;
+  tipo_documento: string | null;
+  origen: string | null;
+} {
+  if (!aiExtraction || typeof aiExtraction !== "object") {
+    return { confianza_nivel: null, tipo_documento: null, origen: null };
+  }
+  const ai = aiExtraction as Record<string, unknown>;
+  const confianza = ai.confianza as Record<string, unknown> | undefined;
+  return {
+    confianza_nivel: (confianza?.nivel as string) ?? null,
+    tipo_documento: (ai.tipo_documento as string) ?? null,
+    origen: (ai.origen as string) ?? null,
+  };
+}
 
 type ProfilesJoin =
   | { full_name: string | null }[]
@@ -105,7 +130,7 @@ export async function getPagosCliente(
   const { data, error } = await supabase
     .from("pagos")
     .select(
-      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, nota_credito, valor_nota_credito, estado, soporte_key, created_at, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)"
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, nota_credito, valor_nota_credito, estado, soporte_key, created_at, editado, ai_extraction, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)"
     )
     .eq("tenant_id", tenantId)
     .eq("codigo_cliente", codigoCliente)
@@ -114,7 +139,9 @@ export async function getPagosCliente(
 
   if (error) throw error;
 
-  return (data || []).map((row) => ({
+  return (data || []).map((row) => {
+    const aiMeta = extractAiMeta(row.ai_extraction);
+    return {
       id: row.id,
       fecha_consignacion: row.fecha_consignacion,
       monto_total: Number(row.monto_total),
@@ -131,6 +158,8 @@ export async function getPagosCliente(
       observaciones: row.observaciones as string | null,
       nota_credito: (row.nota_credito as string | null) ?? null,
       valor_nota_credito: row.valor_nota_credito != null ? Number(row.valor_nota_credito) : null,
+      editado: row.editado ?? false,
+      ...aiMeta,
       facturas: (
         (row.pago_facturas as PagoFactura[] | null) || []
       ).map((f) => ({
@@ -139,7 +168,8 @@ export async function getPagosCliente(
         valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
         valor_aplicado: Number(f.valor_aplicado),
       })),
-    }));
+    };
+  });
 }
 
 /**
@@ -187,7 +217,7 @@ export async function getPagosPaginados(
   let query = supabase
     .from("pagos")
     .select(
-      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, nota_credito, valor_nota_credito, estado, soporte_key, created_at, codigo_cliente, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
+      "id, fecha_consignacion, monto_total, medio_pago, vouchers, numero_recaudo, numero_recibo, observaciones, nota_credito, valor_nota_credito, estado, soporte_key, created_at, codigo_cliente, editado, ai_extraction, profiles!created_by(full_name), pago_facturas(id, no_factura, valor_factura, valor_aplicado)",
       { count: "exact" }
     )
     .eq("tenant_id", tenantId);
@@ -211,6 +241,10 @@ export async function getPagosPaginados(
     query = query.filter("ai_extraction->_audit->>voucher_compartido", "eq", "true");
   } else if (filters.filtro === "voucher_modificado") {
     query = query.filter("ai_extraction->_audit->>voucher_modificado", "eq", "true");
+  } else if (filters.filtro === "editado") {
+    query = query.eq("editado", true);
+  } else if (filters.filtro === "confianza_baja") {
+    query = query.filter("ai_extraction->confianza->>nivel", "eq", "bajo");
   } else if (needsConciliacion && conciliacionIds !== null) {
     if (conciliacionIds.length === 0) {
       return { pagos: [], total: 0 };
@@ -253,34 +287,39 @@ export async function getPagosPaginados(
     );
   }
 
-  const pagos: PagoResumen[] = (data || []).map((row) => ({
-      id: row.id,
-      fecha_consignacion: row.fecha_consignacion,
-      monto_total: Number(row.monto_total),
-      medio_pago: row.medio_pago,
-      vouchers: row.vouchers || [],
-      numero_recaudo: row.numero_recaudo,
-      numero_recibo: row.numero_recibo,
-      observaciones: row.observaciones as string | null,
-      nota_credito: (row.nota_credito as string | null) ?? null,
-      valor_nota_credito: row.valor_nota_credito != null ? Number(row.valor_nota_credito) : null,
-      estado: row.estado,
-      soporte_key: row.soporte_key,
-      created_at: row.created_at,
-      created_by_name: extractProfileName(row.profiles as ProfilesJoin),
-      codigo_cliente: row.codigo_cliente,
-      nombre_cliente: row.codigo_cliente
-        ? (nombresPorCodigo.get(row.codigo_cliente) || null)
-        : null,
-      facturas: (
-        (row.pago_facturas as PagoFactura[] | null) || []
-      ).map((f) => ({
-        id: f.id,
-        no_factura: f.no_factura,
-        valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
-        valor_aplicado: Number(f.valor_aplicado),
-      })),
-    }));
+  const pagos: PagoResumen[] = (data || []).map((row) => {
+      const aiMeta = extractAiMeta(row.ai_extraction);
+      return {
+        id: row.id,
+        fecha_consignacion: row.fecha_consignacion,
+        monto_total: Number(row.monto_total),
+        medio_pago: row.medio_pago,
+        vouchers: row.vouchers || [],
+        numero_recaudo: row.numero_recaudo,
+        numero_recibo: row.numero_recibo,
+        observaciones: row.observaciones as string | null,
+        nota_credito: (row.nota_credito as string | null) ?? null,
+        valor_nota_credito: row.valor_nota_credito != null ? Number(row.valor_nota_credito) : null,
+        estado: row.estado,
+        soporte_key: row.soporte_key,
+        created_at: row.created_at,
+        created_by_name: extractProfileName(row.profiles as ProfilesJoin),
+        codigo_cliente: row.codigo_cliente,
+        nombre_cliente: row.codigo_cliente
+          ? (nombresPorCodigo.get(row.codigo_cliente) || null)
+          : null,
+        editado: row.editado ?? false,
+        ...aiMeta,
+        facturas: (
+          (row.pago_facturas as PagoFactura[] | null) || []
+        ).map((f) => ({
+          id: f.id,
+          no_factura: f.no_factura,
+          valor_factura: f.valor_factura ? Number(f.valor_factura) : null,
+          valor_aplicado: Number(f.valor_aplicado),
+        })),
+      };
+    });
 
   return { pagos, total: count || 0 };
 }
@@ -329,6 +368,8 @@ export async function getPagoDetalle(
     valor_nota_credito: data.valor_nota_credito
       ? Number(data.valor_nota_credito)
       : null,
+    editado: data.editado ?? false,
+    ...extractAiMeta(data.ai_extraction),
     estado: data.estado,
     soporte_key: data.soporte_key,
     soporte_url_firmada: soporteUrlFirmada,
@@ -359,7 +400,7 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
   const supabase = await createClient();
 
   // get_pagos_conciliacion devuelve ambos conteos en UNA sola llamada
-  const [sinCRMResult, montoModResult, manualResult, conciliacionResult, voucherCompResult, voucherModResult] =
+  const [sinCRMResult, montoModResult, manualResult, conciliacionResult, voucherCompResult, voucherModResult, editadoResult, confianzaBajaResult] =
     await Promise.all([
       supabase
         .from("pagos")
@@ -392,6 +433,18 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
         .select("*", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
         .filter("ai_extraction->_audit->>voucher_modificado", "eq", "true"),
+
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("editado", true),
+
+      supabase
+        .from("pagos")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("ai_extraction->confianza->>nivel", "eq", "bajo"),
     ]);
 
   if (sinCRMResult.error) throw sinCRMResult.error;
@@ -419,6 +472,8 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
     conDiscrepancia: Number(conciliacionRow?.con_discrepancia ?? 0),
     voucherCompartido: voucherCompResult.count || 0,
     voucherModificado: voucherModResult.count || 0,
+    editado: editadoResult.count || 0,
+    confianzaBaja: confianzaBajaResult.count || 0,
   };
 }
 

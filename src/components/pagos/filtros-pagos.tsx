@@ -177,6 +177,22 @@ export function FiltrosPagos({ total, auditCounts }: FiltrosPagosProps) {
           colorInactive="bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100"
           colorActive="bg-teal-100 text-teal-800 border-teal-300"
         />
+        <AuditCapsule
+          count={auditCounts.editado}
+          label="editado"
+          active={filtro === "editado"}
+          onClick={() => toggleFiltro("editado")}
+          colorInactive="bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100"
+          colorActive="bg-blue-100 text-blue-800 border-blue-300"
+        />
+        <AuditCapsule
+          count={auditCounts.confianzaBaja}
+          label="confianza baja"
+          active={filtro === "confianza_baja"}
+          onClick={() => toggleFiltro("confianza_baja")}
+          colorInactive="bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100"
+          colorActive="bg-rose-100 text-rose-800 border-rose-300"
+        />
       </div>
     </div>
   );

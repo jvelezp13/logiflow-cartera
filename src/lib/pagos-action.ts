@@ -309,6 +309,20 @@ export async function crearPago(
       audit.voucher_modificado = userVoucher !== null && userVoucher !== aiVoucher;
     }
 
+    const aiFecha = datos?.fecha_consignacion ? String(datos.fecha_consignacion) : null;
+    if (aiFecha) {
+      audit.fecha_ia = aiFecha;
+      audit.fecha_usuario = fechaConsignacion;
+      audit.fecha_modificada = fechaConsignacion !== aiFecha;
+    }
+
+    const aiMedio = datos?.medio_de_pago ? String(datos.medio_de_pago) : null;
+    if (aiMedio) {
+      audit.medio_pago_ia = aiMedio;
+      audit.medio_pago_usuario = medioPago;
+      audit.medio_pago_modificado = medioPago !== null && medioPago !== aiMedio;
+    }
+
     aiExtraction = { ...aiExtraction, _audit: audit };
   } else {
     aiExtraction = { _audit: { data_origin: "manual" } };
@@ -634,10 +648,9 @@ export async function editarPago(
     return { success: true };
   }
 
-  // Update pago
   const { error: updateError } = await supabase
     .from("pagos")
-    .update(updateData)
+    .update({ ...updateData, editado: true })
     .eq("id", pagoId)
     .eq("tenant_id", profile.tenant_id);
 
@@ -699,6 +712,7 @@ export async function reemplazarSoporte(
       soporte_key: nuevoSoporteKey,
       soporte_url: `r2://${nuevoSoporteKey}`,
       soporte_nombre: nuevoSoporteNombre,
+      editado: true,
     })
     .eq("id", pagoId)
     .eq("tenant_id", profile.tenant_id);
