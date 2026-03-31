@@ -24,10 +24,17 @@ import { RegistrarPagoSheet } from "@/components/pagos/registrar-pago-sheet";
 
 export default async function DetalleClientePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ codigo: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { codigo } = await params;
+  const sp = await searchParams;
+  const esRetroactivo = sp.registrar_pago === "retroactivo";
+  const retroactivoData = esRetroactivo
+    ? { factura: String(sp.factura || ""), monto: String(sp.monto || "") }
+    : undefined;
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
   const [{ info, facturas: todasFacturas, pedidos }, notas, pagos, facturasAbiertas] =
@@ -326,6 +333,8 @@ export default async function DetalleClientePage({
               <RegistrarPagoSheet
                 codigoCliente={codigo}
                 facturas={facturasAbiertas}
+                defaultOpen={esRetroactivo}
+                retroactivo={retroactivoData}
               />
             </div>
           )}

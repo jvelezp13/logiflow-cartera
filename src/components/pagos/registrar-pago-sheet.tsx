@@ -12,17 +12,22 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { FormularioPago } from "@/components/pagos/formulario-pago";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
+import type { RetroactivoData } from "@/lib/pagos-action";
 
 interface RegistrarPagoSheetProps {
   codigoCliente: string;
   facturas: FacturaAbierta[];
+  defaultOpen?: boolean;
+  retroactivo?: RetroactivoData;
 }
 
 export function RegistrarPagoSheet({
   codigoCliente,
   facturas,
+  defaultOpen = false,
+  retroactivo,
 }: RegistrarPagoSheetProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   const handleSuccess = useCallback(() => {
     setTimeout(() => setOpen(false), 1500);
@@ -38,13 +43,16 @@ export function RegistrarPagoSheet({
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Registrar pago — {codigoCliente}</SheetTitle>
+          <SheetTitle>
+            {retroactivo ? "Registrar pago retroactivo" : "Registrar pago"} — {codigoCliente}
+          </SheetTitle>
         </SheetHeader>
         <div className="mt-4">
           <FormularioPago
             codigoCliente={codigoCliente}
             facturas={facturas}
             onSuccess={handleSuccess}
+            retroactivo={retroactivo}
           />
         </div>
       </SheetContent>

@@ -74,6 +74,15 @@ export interface PagosAuditCounts {
   confianzaBaja: number;
 }
 
+export interface HistorialEntry {
+  id: string;
+  campo: string;
+  valor_anterior: string | null;
+  valor_nuevo: string | null;
+  modificado_por_nombre: string | null;
+  created_at: string;
+}
+
 export interface FacturaAbierta {
   no_factura: string;
   fecha_vencimiento: string | null;
@@ -502,5 +511,34 @@ export async function getFacturasAbiertas(
     fecha_vencimiento: f.fecha_vencimiento,
     mora: Number(f.mora),
     total: Number(f.total),
+  }));
+}
+
+/**
+ * Historial de cambios de un pago (para el Sheet de edicion).
+ * RLS filtra por tenant via FK a pagos.
+ */
+export async function getHistorialPago(
+  pagoId: string
+): Promise<HistorialEntry[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("pagos_historial")
+    .select(
+      "id, campo, valor_anterior, valor_nuevo, created_at, profiles!modificado_por(full_name)"
+    )
+    .eq("pago_id", pagoId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    campo: row.campo,
+    valor_anterior: row.valor_anterior,
+    valor_nuevo: row.valor_nuevo,
+    modificado_por_nombre: extractProfileName(row.profiles as ProfilesJoin),
+    created_at: row.created_at,
   }));
 }

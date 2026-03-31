@@ -32,6 +32,7 @@ import {
 import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import { SelectorFacturas } from "@/components/pagos/selector-facturas";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
+import type { RetroactivoData } from "@/lib/pagos-action";
 import { type DatosSoporte, MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
 
 // --- State Machine ---
@@ -152,14 +153,20 @@ interface FormularioPagoProps {
   codigoCliente: string;
   facturas: FacturaAbierta[];
   onSuccess?: () => void;
+  retroactivo?: RetroactivoData;
 }
 
 export function FormularioPago({
   codigoCliente,
   facturas,
   onSuccess,
+  retroactivo,
 }: FormularioPagoProps) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, retroactivo, (retro) => ({
+    ...initialState,
+    ...(retro?.monto ? { montoTotal: retro.monto } : {}),
+    ...(retro ? { step: "reviewing" as Step } : {}),
+  }));
   const [actionState, formAction, isSubmitting] = useActionState(
     crearPago,
     null
@@ -378,6 +385,9 @@ export function FormularioPago({
         name="voucher_duplicado_aceptado"
         value={voucherWarning ? "true" : ""}
       />
+      {retroactivo && (
+        <input type="hidden" name="retroactivo" value="true" />
+      )}
 
       {/* Error/warning banner */}
       {state.error && (
@@ -652,13 +662,27 @@ export function FormularioPago({
         />
       </div>
 
-      {/* Selector de facturas */}
-      <SelectorFacturas
-        facturas={facturas}
-        montoDisponible={parseInt(state.montoTotal, 10) || 0}
-        selected={state.facturasSeleccionadas}
-        onChange={(f) => dispatch({ type: "SET_FACTURAS", facturas: f })}
-      />
+      {/* Selector de facturas (no aplica en modo retroactivo) */}
+      {retroactivo ? (
+        <div className="space-y-1">
+          <label className="text-xs text-slate-500">Factura referencia</label>
+          <Input
+            value={retroactivo.factura}
+            readOnly
+            className="h-8 text-sm bg-slate-50"
+          />
+          <p className="text-[10px] text-slate-400">
+            Pago retroactivo — factura liquidada en CRM sin pasar por cartera
+          </p>
+        </div>
+      ) : (
+        <SelectorFacturas
+          facturas={facturas}
+          montoDisponible={parseInt(state.montoTotal, 10) || 0}
+          selected={state.facturasSeleccionadas}
+          onChange={(f) => dispatch({ type: "SET_FACTURAS", facturas: f })}
+        />
+      )}
 
       {/* Submit */}
       <div className="flex items-center gap-3 pt-2">

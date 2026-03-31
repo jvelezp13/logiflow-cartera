@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { getMoraBadgeStyles } from "@/lib/severity";
 import { formatCurrencyFull } from "@/lib/format";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
@@ -132,11 +133,9 @@ export function SelectorFacturas({
                   </td>
                   <td className="p-2 font-medium text-xs">{f.no_factura}</td>
                   <td className="p-2 text-center">
-                    <span
-                      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${badge.classes}`}
-                    >
+                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0.5 ${badge.classes}`}>
                       {badge.label}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="p-2 text-right tabular-nums text-xs">
                     {formatCurrencyFull(f.total)}

@@ -659,6 +659,9 @@ export async function getClientesMoraConPedidos(): Promise<ClientePreFacturacion
   const supabase = await createClient();
   const tenantId = await getTenantId();
 
+  // Guard: PostgREST .in() tiene limite practico por URL (~2000 items)
+  if (codigosUnicos.length === 0) return [];
+
   // Query 2: solo clientes con mora > 5 (atencion o critico)
   const { data: clientesRaw, error: errorClientes } = await supabase
     .from("vista_cliente_resumen")
@@ -712,6 +715,8 @@ export async function getClientesCupoExcedido(): Promise<ClienteCupoExcedido[]> 
   const { pedidosPorCliente, codigos: codigosUnicos } = agrupados;
   const supabase = await createClient();
   const tenantId = await getTenantId();
+
+  if (codigosUnicos.length === 0) return [];
 
   // Query 2: datos de clientes con cupo asignado
   const { data: clientesRaw, error: errorClientes } = await supabase

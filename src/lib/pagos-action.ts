@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { generarUrlSubida, generarUrlLectura, eliminarObjeto } from "@/lib/r2";
 import { extraerDatosSoporte, type DatosSoporte } from "@/lib/ai-extraction";
 import { logError } from "@/lib/logger";
+import { getHistorialPago } from "@/lib/queries/pagos-server";
 import { syncFetch } from "@/lib/sync-client";
 import { formatCurrencyFull } from "@/lib/format";
 import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
@@ -25,6 +26,11 @@ function validarFechaConsignacion(fecha: string): string | null {
 }
 
 // --- Types ---
+
+export interface RetroactivoData {
+  factura: string;
+  monto: string;
+}
 
 export interface VoucherDuplicadoInfo {
   pago_id: string;
@@ -768,4 +774,11 @@ export async function reemplazarSoporte(
   revalidatePath(`/clientes/${actual.codigo_cliente}`);
   revalidatePath("/pagos");
   return { success: true };
+}
+
+/**
+ * Server action para obtener historial de cambios de un pago.
+ */
+export async function obtenerHistorialPago(pagoId: string) {
+  return getHistorialPago(pagoId);
 }

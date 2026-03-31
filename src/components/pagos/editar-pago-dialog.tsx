@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -18,12 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, CheckCircle2, AlertCircle, Upload, ImageIcon } from "lucide-react";
-import { editarPago, reemplazarSoporte, obtenerUrlSubida } from "@/lib/pagos-action";
+import { Pencil, CheckCircle2, AlertCircle, Upload, ImageIcon, History } from "lucide-react";
+import { editarPago, reemplazarSoporte, obtenerUrlSubida, obtenerHistorialPago } from "@/lib/pagos-action";
 import { comprimirImagen } from "@/lib/image-compression";
-import { formatCurrencyFull } from "@/lib/format";
+import { formatCurrencyFull, formatFechaRelativa } from "@/lib/format";
 import { MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
-import type { PagoResumen } from "@/lib/queries/pagos-server";
+import type { PagoResumen, HistorialEntry } from "@/lib/queries/pagos-server";
 
 interface EditarPagoDialogProps {
   pago: PagoResumen;
@@ -46,6 +46,7 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
   const [soporteUploading, setSoporteUploading] = useState(false);
   const [soporteResult, setSoporteResult] = useState<{ success?: boolean; error?: string } | null>(null);
+  const [historial, setHistorial] = useState<HistorialEntry[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function resetForm() {
@@ -96,9 +97,21 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
     }
   }
 
+  useEffect(() => {
+    if (!open || !pago.editado) return;
+    let cancelled = false;
+    obtenerHistorialPago(pago.id)
+      .then((h) => { if (!cancelled) setHistorial(h); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, pago.id, pago.editado]);
+
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
-    if (nextOpen) resetForm();
+    if (nextOpen) {
+      resetForm();
+      setHistorial([]);
+    }
   }
 
   function handleGuardar() {
@@ -342,6 +355,33 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
           >
             {isPending ? "Guardando..." : "Guardar"}
           </Button>
+
+          {/* Historial de cambios */}
+          {pago.editado && historial.length > 0 && (
+            <div className="border-t pt-4 space-y-2">
+              <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                <History className="h-3.5 w-3.5" />
+                Historial de cambios
+              </p>
+              <div className="space-y-1.5">
+                {historial.map((h) => (
+                  <div
+                    key={h.id}
+                    className="text-xs text-slate-600 bg-slate-50 rounded-md px-3 py-2"
+                  >
+                    <span className="font-medium">
+                      {h.campo === "soporte"
+                        ? "Soporte reemplazado"
+                        : `${h.campo.replace(/_/g, " ")}: ${h.valor_anterior || "(vacío)"} → ${h.valor_nuevo || "(vacío)"}`}
+                    </span>
+                    <span className="text-slate-400 ml-2">
+                      {h.modificado_por_nombre || "Sistema"} · {formatFechaRelativa(h.created_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

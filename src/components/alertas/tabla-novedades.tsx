@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Check, CheckCheck } from "lucide-react";
 import { marcarAlertaLeida, marcarTodasLeidas } from "@/lib/alertas-action";
 import { formatFechaCorta } from "@/lib/format";
@@ -18,12 +19,12 @@ import Link from "next/link";
 import type { NovedadSync } from "@/lib/queries/alertas-server";
 
 const TIPO_BADGE: Record<string, { label: string; classes: string }> = {
-  cartera_factura_pagada: { label: "Pago", classes: "bg-green-100 text-green-700" },
-  cupo_cambio: { label: "Cupo", classes: "bg-blue-100 text-blue-700" },
-  credito_activado: { label: "Credito", classes: "bg-blue-100 text-blue-700" },
-  plazo_cambio: { label: "Plazo", classes: "bg-amber-100 text-amber-700" },
-  cartera_deuda_creciente: { label: "Deuda", classes: "bg-red-100 text-red-700" },
-  cartera_cliente_nuevo: { label: "Nuevo", classes: "bg-slate-100 text-slate-700" },
+  cartera_factura_pagada: { label: "Pago", classes: "bg-green-100 text-green-700 border-green-200" },
+  cupo_cambio: { label: "Cupo", classes: "bg-blue-100 text-blue-700 border-blue-200" },
+  credito_activado: { label: "Credito", classes: "bg-blue-100 text-blue-700 border-blue-200" },
+  plazo_cambio: { label: "Plazo", classes: "bg-amber-100 text-amber-700 border-amber-200" },
+  cartera_deuda_creciente: { label: "Deuda", classes: "bg-red-100 text-red-700 border-red-200" },
+  cartera_cliente_nuevo: { label: "Nuevo", classes: "bg-slate-100 text-slate-700 border-slate-200" },
 };
 
 function getTipoBadge(tipo: string) {
@@ -87,11 +88,9 @@ export function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
                     {formatFechaCorta(n.created_at)}
                   </TableCell>
                   <TableCell className="py-1.5">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.classes}`}
-                    >
+                    <Badge variant="outline" className={badge.classes}>
                       {badge.label}
-                    </span>
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm py-1.5">
                     <div>{n.mensaje || "-"}</div>
