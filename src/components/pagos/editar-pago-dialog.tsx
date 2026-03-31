@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import {
   Sheet,
   SheetContent,
@@ -18,8 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, CheckCircle2, AlertCircle } from "lucide-react";
-import { editarPago } from "@/lib/pagos-action";
+import { Pencil, CheckCircle2, AlertCircle, Upload, ImageIcon } from "lucide-react";
+import { editarPago, reemplazarSoporte, obtenerUrlSubida } from "@/lib/pagos-action";
+import { comprimirImagen } from "@/lib/image-compression";
 import { formatCurrencyFull } from "@/lib/format";
 import { MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
 import type { PagoResumen } from "@/lib/queries/pagos-server";
@@ -43,6 +44,9 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
   );
 
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
+  const [soporteUploading, setSoporteUploading] = useState(false);
+  const [soporteResult, setSoporteResult] = useState<{ success?: boolean; error?: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function resetForm() {
     setFechaConsignacion(pago.fecha_consignacion);
@@ -55,6 +59,41 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
       pago.valor_nota_credito != null ? String(pago.valor_nota_credito) : ""
     );
     setResult(null);
+    setSoporteResult(null);
+    setSoporteUploading(false);
+  }
+
+  async function handleSoporteChange(file: File) {
+    if (!pago.codigo_cliente) return;
+    setSoporteUploading(true);
+    setSoporteResult(null);
+    try {
+      const compressed = await comprimirImagen(file);
+      const { uploadUrl, objectKey, error: urlError } = await obtenerUrlSubida(
+        pago.codigo_cliente,
+        file.name
+      );
+      if (urlError || !uploadUrl || !objectKey) {
+        setSoporteResult({ error: urlError || "Error al generar URL" });
+        return;
+      }
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        body: compressed,
+        headers: { "Content-Type": "image/webp" },
+      });
+      if (!uploadRes.ok) {
+        setSoporteResult({ error: "Error al subir archivo" });
+        return;
+      }
+      const res = await reemplazarSoporte(pago.id, objectKey, file.name);
+      setSoporteResult(res);
+    } catch {
+      setSoporteResult({ error: "Error al reemplazar soporte" });
+    } finally {
+      setSoporteUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -230,6 +269,55 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
                   {formatCurrencyFull(parseInt(valorNotaCredito, 10))}
                 </p>
               )}
+          </div>
+
+          {/* Reemplazar soporte */}
+          <div className="space-y-2 border-t pt-4">
+            <label className="text-xs text-slate-500">Soporte</label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 truncate flex-1">
+                {pago.soporte_key ? (
+                  <span className="inline-flex items-center gap-1">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    Soporte actual
+                  </span>
+                ) : (
+                  "Sin soporte"
+                )}
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleSoporteChange(f);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={soporteUploading || isPending}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {soporteUploading ? (
+                  "Subiendo..."
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Upload className="h-3.5 w-3.5" />
+                    {pago.soporte_key ? "Reemplazar" : "Adjuntar"}
+                  </span>
+                )}
+              </Button>
+            </div>
+            {soporteResult?.error && (
+              <p className="text-xs text-red-600">{soporteResult.error}</p>
+            )}
+            {soporteResult?.success && (
+              <p className="text-xs text-emerald-600">Soporte actualizado</p>
+            )}
           </div>
 
           {/* Resultado */}
