@@ -10,6 +10,20 @@ import { syncFetch } from "@/lib/sync-client";
 import { formatCurrencyFull } from "@/lib/format";
 import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
 
+// --- Helpers ---
+
+function parseVouchers(csv: string): string[] {
+  return csv.split(",").map((v) => v.trim()).filter(Boolean).slice(0, 4);
+}
+
+function validarFechaConsignacion(fecha: string): string | null {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const haceUnAno = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+  if (fecha > hoy) return "La fecha de consignación no puede ser futura";
+  if (fecha < haceUnAno) return "La fecha de consignación no puede ser mayor a 1 año";
+  return null;
+}
+
 // --- Types ---
 
 export interface VoucherDuplicadoInfo {
@@ -189,16 +203,8 @@ export async function crearPago(
   if (!codigoCliente) return { error: "Cliente es requerido" };
   if (!fechaConsignacion) return { error: "Fecha de consignacion es requerida" };
 
-  // Strings ISO (YYYY-MM-DD) se comparan lexicográficamente sin problemas de timezone
-  const hoy = new Date().toISOString().slice(0, 10);
-  const haceUnAno = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
-
-  if (fechaConsignacion > hoy) {
-    return { error: "La fecha de consignación no puede ser futura" };
-  }
-  if (fechaConsignacion < haceUnAno) {
-    return { error: "La fecha de consignación no puede ser mayor a 1 año" };
-  }
+  const fechaError = validarFechaConsignacion(fechaConsignacion);
+  if (fechaError) return { error: fechaError };
 
   const montoTotal = parseInt(montoTotalStr, 10);
   if (!montoTotal || montoTotal <= 0) {
@@ -254,12 +260,7 @@ export async function crearPago(
     };
   }
 
-  // Parse vouchers (CSV) — max 4
-  const vouchers = vouchersStr
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .slice(0, 4);
+  const vouchers = parseVouchers(vouchersStr);
 
   // Parse optional numbers
   const recaudo = numeroRecaudo ? parseInt(numeroRecaudo, 10) : null;
@@ -564,10 +565,9 @@ export async function editarPago(
 
   const supabase = await createClient();
 
-  // Leer pago actual
   const { data: actual, error: readError } = await supabase
     .from("pagos")
-    .select("*")
+    .select("codigo_cliente, fecha_consignacion, monto_total, medio_pago, vouchers, observaciones, nota_credito, valor_nota_credito")
     .eq("id", pagoId)
     .eq("tenant_id", profile.tenant_id)
     .single();
@@ -576,13 +576,9 @@ export async function editarPago(
     return { error: "Pago no encontrado" };
   }
 
-  // Validaciones
   if (cambios.fecha_consignacion) {
-    const fecha = String(cambios.fecha_consignacion);
-    const hoy = new Date().toISOString().slice(0, 10);
-    const haceUnAno = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
-    if (fecha > hoy) return { error: "Fecha no puede ser futura" };
-    if (fecha < haceUnAno) return { error: "Fecha no puede ser mayor a 1 año" };
+    const fechaErr = validarFechaConsignacion(String(cambios.fecha_consignacion));
+    if (fechaErr) return { error: fechaErr };
   }
 
   if (cambios.monto_total !== undefined) {
@@ -616,11 +612,7 @@ export async function editarPago(
     });
 
     if (campo === "vouchers") {
-      updateData[campo] = String(cambios[campo] || "")
-        .split(",")
-        .map((v: string) => v.trim())
-        .filter(Boolean)
-        .slice(0, 4);
+      updateData[campo] = parseVouchers(String(cambios[campo] || ""));
     } else {
       updateData[campo] = cambios[campo] ?? null;
     }

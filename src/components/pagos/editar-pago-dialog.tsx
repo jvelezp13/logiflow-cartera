@@ -21,17 +21,12 @@ import {
 import { Pencil, CheckCircle2, AlertCircle } from "lucide-react";
 import { editarPago } from "@/lib/pagos-action";
 import { formatCurrencyFull } from "@/lib/format";
+import { MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
 import type { PagoResumen } from "@/lib/queries/pagos-server";
 
 interface EditarPagoDialogProps {
   pago: PagoResumen;
 }
-
-const MEDIOS_PAGO = [
-  "Tarjeta de recaudo",
-  "Bancolombia Nexo",
-  "Davivienda Nexo",
-] as const;
 
 export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
   const [open, setOpen] = useState(false);
@@ -175,7 +170,7 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
                 <SelectValue placeholder="Seleccionar..." />
               </SelectTrigger>
               <SelectContent>
-                {MEDIOS_PAGO.map((medio) => (
+                {MEDIOS_DE_PAGO.map((medio) => (
                   <SelectItem key={medio} value={medio}>
                     {medio}
                   </SelectItem>
