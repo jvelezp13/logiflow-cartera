@@ -84,8 +84,10 @@ export interface HistorialEntry {
   created_at: string;
 }
 
+export type ConfianzaNivel = "alto" | "medio" | "bajo";
+
 export interface AiMetadata {
-  confianza_nivel: string | null;
+  confianza_nivel: ConfianzaNivel | null;
   confianza_notas: string | null;
   tipo_documento: string | null;
   origen: string | null;
@@ -125,7 +127,7 @@ function extractAiMetadata(aiExtraction: unknown): AiMetadata | null {
   const ai = aiExtraction as Record<string, unknown>;
   const confianza = ai.confianza as Record<string, unknown> | undefined;
   return {
-    confianza_nivel: (confianza?.nivel as string) ?? null,
+    confianza_nivel: (confianza?.nivel as ConfianzaNivel) ?? null,
     confianza_notas: (confianza?.notas as string) ?? null,
     tipo_documento: (ai.tipo_documento as string) ?? null,
     origen: (ai.origen as string) ?? null,

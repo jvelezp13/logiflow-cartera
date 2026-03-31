@@ -21,7 +21,7 @@ import { Paginacion } from "@/components/paginacion";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { CodigosCRMForm } from "@/components/pagos/codigos-crm-form";
 import { EditarPagoDialog } from "@/components/pagos/editar-pago-dialog";
-import { MessageSquare, History, AlertTriangle } from "lucide-react";
+import { MessageSquare, History } from "lucide-react";
 import { AiMetadataPopover } from "@/components/pagos/ai-metadata-popover";
 
 import Link from "next/link";
@@ -122,11 +122,6 @@ export default async function PagosPage({
                             {pago.editado && (
                               <span title="Editado" className="text-blue-500">
                                 <History className="h-3 w-3" />
-                              </span>
-                            )}
-                            {pago.confianza_nivel === "bajo" && (
-                              <span title="Confianza IA baja" className="text-rose-500">
-                                <AlertTriangle className="h-3 w-3" />
                               </span>
                             )}
                             {pago.ai_metadata && (

@@ -22,22 +22,34 @@ function formatValue(value: unknown, indent = 0): string {
   return String(value);
 }
 
+import type { ConfianzaNivel } from "@/lib/queries/pagos-server";
+
+const CONFIANZA_COLORS: Record<ConfianzaNivel, { icon: string; hover: string; label: string }> = {
+  alto:  { icon: "text-emerald-500", hover: "hover:text-emerald-700", label: "Confianza alta" },
+  medio: { icon: "text-amber-500",   hover: "hover:text-amber-700",   label: "Confianza media" },
+  bajo:  { icon: "text-rose-500",    hover: "hover:text-rose-700",    label: "Confianza baja" },
+};
+
+const DEFAULT_COLOR = { icon: "text-slate-400", hover: "hover:text-slate-600", label: "Metadata IA" };
+
 export function AiMetadataPopover({ data }: { data: AiMetadata }) {
+  const color = (data.confianza_nivel && CONFIANZA_COLORS[data.confianza_nivel]) ?? DEFAULT_COLOR;
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="text-violet-400 hover:text-violet-600 transition-colors"
-          title="Metadata IA"
+          className={`${color.icon} ${color.hover} transition-colors`}
+          title={color.label}
         >
           <Sparkles className="h-3 w-3" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-80 text-xs space-y-3" align="start">
         <p className="font-medium text-slate-700 flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-          Metadata IA
+          <Sparkles className={`h-3.5 w-3.5 ${color.icon}`} />
+          {color.label}
         </p>
 
         {data.confianza_nivel && (
