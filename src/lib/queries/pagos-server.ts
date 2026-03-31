@@ -152,30 +152,31 @@ export async function getPagosPaginados(
   const sanitized = filters.busqueda
     ? sanitizeSearchInput(filters.busqueda)
     : null;
+  const hasSearch = !!sanitized && sanitized.length >= 3;
+  const needsConciliacion =
+    filters.filtro === "sin_conciliar" || filters.filtro === "discrepancia";
 
-  // Buscar por factura solo si el término parece uno (alfanumérico 4+ chars)
-  let pagoIdsByFactura: string[] | null = null;
-  if (sanitized && sanitized.length >= 4) {
-    const { data: matchedFacturas } = await supabase
-      .from("pago_facturas")
-      .select("pago_id")
-      .ilike("no_factura", `%${sanitized}%`)
-      .limit(100);
-    if (matchedFacturas && matchedFacturas.length > 0) {
-      pagoIdsByFactura = [...new Set(matchedFacturas.map((f) => f.pago_id))].slice(0, 50);
-    }
-  }
+  const [searchResult, conciliacionResult] = await Promise.all([
+    hasSearch
+      ? supabase.rpc("buscar_pago_ids", {
+          p_tenant_id: tenantId,
+          p_term: sanitized,
+        })
+      : Promise.resolve({ data: null }),
+    needsConciliacion
+      ? supabase.rpc("get_pago_ids_conciliacion", {
+          p_tenant_id: tenantId,
+          p_estado: filters.filtro,
+        })
+      : Promise.resolve({ data: null }),
+  ]);
 
-  // Filtro de conciliacion: obtener IDs via RPC antes de armar la query principal
-  // get_pago_ids_conciliacion es parametrizado: acepta 'sin_conciliar' | 'discrepancia'
-  let conciliacionIds: string[] | null = null;
-  if (filters.filtro === "sin_conciliar" || filters.filtro === "discrepancia") {
-    const { data: idRows } = await supabase.rpc("get_pago_ids_conciliacion", {
-      p_tenant_id: tenantId,
-      p_estado: filters.filtro === "sin_conciliar" ? "sin_conciliar" : "discrepancia",
-    });
-    conciliacionIds = (idRows as string[] | null) ?? [];
-  }
+  const searchPagoIds = hasSearch
+    ? (searchResult.data as { pago_id: string }[] | null)?.map((r) => r.pago_id) ?? []
+    : null;
+  const conciliacionIds = needsConciliacion
+    ? (conciliacionResult.data as string[] | null) ?? []
+    : null;
 
   let query = supabase
     .from("pagos")
@@ -185,11 +186,11 @@ export async function getPagosPaginados(
     )
     .eq("tenant_id", tenantId);
 
-  if (sanitized) {
-    if (pagoIdsByFactura) {
-      query = query.or(`codigo_cliente.ilike.%${sanitized}%,id.in.(${pagoIdsByFactura.join(",")})`);
+  if (hasSearch) {
+    if (searchPagoIds && searchPagoIds.length > 0) {
+      query = query.in("id", searchPagoIds);
     } else {
-      query = query.ilike("codigo_cliente", `%${sanitized}%`);
+      return { pagos: [], total: 0 };
     }
   }
   if (filters.filtro === "sin_crm") {
@@ -200,9 +201,8 @@ export async function getPagosPaginados(
     query = query.filter("ai_extraction->_audit->>monto_modificado", "eq", "true");
   } else if (filters.filtro === "manual") {
     query = query.filter("ai_extraction->_audit->>data_origin", "eq", "manual");
-  } else if ((filters.filtro === "sin_conciliar" || filters.filtro === "discrepancia") && conciliacionIds !== null) {
+  } else if (needsConciliacion && conciliacionIds !== null) {
     if (conciliacionIds.length === 0) {
-      // No hay pagos en este estado — forzar resultado vacío
       return { pagos: [], total: 0 };
     }
     query = query.in("id", conciliacionIds);
@@ -236,8 +236,8 @@ export async function getPagosPaginados(
     nombresPorCodigo = new Map(
       (clientesData || []).map((c) => [
         c.codigo_cliente as string,
-        (c.razon_social as string | null) ||
-          (c.nombre_negocio as string | null) ||
+        (c.nombre_negocio as string | null) ||
+          (c.razon_social as string | null) ||
           "",
       ])
     );

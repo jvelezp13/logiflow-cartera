@@ -90,7 +90,7 @@ export function FiltrosPagos({ total, auditCounts }: FiltrosPagosProps) {
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Buscar por cliente o factura..."
+            placeholder="Buscar por cliente, factura o voucher..."
             defaultValue={q}
             onChange={(e) => handleSearch(e.target.value)}
             className="pl-9 h-9 text-sm"
