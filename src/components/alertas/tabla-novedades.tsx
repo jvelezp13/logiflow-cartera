@@ -15,15 +15,7 @@ import { marcarAlertaLeida, marcarTodasLeidas } from "@/lib/alertas-action";
 import { formatFechaCorta } from "@/lib/format";
 import Link from "next/link";
 
-interface NovedadSync {
-  id: string;
-  tipo: string;
-  referencia: string | null;
-  mensaje: string | null;
-  datos: Record<string, unknown> | null;
-  created_at: string;
-  leida: boolean;
-}
+import type { NovedadSync } from "@/lib/queries/alertas-server";
 
 const TIPO_BADGE: Record<string, { label: string; classes: string }> = {
   cartera_factura_pagada: { label: "Pago", classes: "bg-green-100 text-green-700" },
