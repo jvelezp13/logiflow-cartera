@@ -32,6 +32,7 @@ export async function getClientesConNotas(
     .from("notas_cliente")
     .select("codigo_cliente")
     .eq("tenant_id", tenantId)
+    .eq("app_id", "cartera")
     .in("codigo_cliente", codigosClientes);
 
   return new Set((data || []).map((r) => r.codigo_cliente));
@@ -56,6 +57,7 @@ export async function getNotasIndicador(
     .from("notas_cliente")
     .select("codigo_cliente, created_at")
     .eq("tenant_id", tenantId)
+    .eq("app_id", "cartera")
     .in("codigo_cliente", codigosClientes);
 
   const treintaDiasAtras = new Date();
@@ -84,6 +86,7 @@ export async function getNotasCliente(
     .from("notas_cliente")
     .select("id, tipo, contenido, created_at, profiles!created_by(full_name)")
     .eq("tenant_id", tenantId)
+    .eq("app_id", "cartera")
     .eq("codigo_cliente", codigoCliente)
     .order("created_at", { ascending: false, nullsFirst: false });
 
