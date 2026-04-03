@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import { getPagosPaginados, getPagosAuditCounts, type FiltroAuditoria } from "@/lib/queries/pagos-server";
+import { getPagosAuditados, type PagoAuditoriaStatus } from "@/lib/queries/auditoria-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { buildPageUrl } from "@/lib/url";
@@ -21,12 +22,28 @@ import { Paginacion } from "@/components/paginacion";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { CodigosCRMForm } from "@/components/pagos/codigos-crm-form";
 import { EditarPagoDialog } from "@/components/pagos/editar-pago-dialog";
-import { MessageSquare, History } from "lucide-react";
+import { MessageSquare, History, ShieldCheck, ShieldAlert } from "lucide-react";
 import { AiMetadataPopover } from "@/components/pagos/ai-metadata-popover";
 
 import Link from "next/link";
 
 const ITEMS_PER_PAGE = 20;
+
+function AuditShieldIcon({ status }: { status: PagoAuditoriaStatus | undefined }) {
+  if (!status || status.total === 0) return null;
+  if (status.aprobadas === status.total) {
+    return (
+      <span title="Auditoria aprobada" className="text-emerald-600">
+        <ShieldCheck className="h-3 w-3" />
+      </span>
+    );
+  }
+  return (
+    <span title="Auditoria pendiente" className="text-amber-500">
+      <ShieldAlert className="h-3 w-3" />
+    </span>
+  );
+}
 
 export default async function PagosPage({
   searchParams,
@@ -54,6 +71,9 @@ export default async function PagosPage({
       }),
       getPagosAuditCounts(),
     ]);
+
+  const pagoIds = pagos.map((p) => p.id);
+  const auditoriaMap = await getPagosAuditados(pagoIds);
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
@@ -127,6 +147,7 @@ export default async function PagosPage({
                             {pago.ai_metadata && (
                               <AiMetadataPopover data={pago.ai_metadata} />
                             )}
+                            <AuditShieldIcon status={auditoriaMap.get(pago.id)} />
                           </div>
                           {pago.created_by_name && (
                             <div className="text-xs text-slate-400 mt-0.5">

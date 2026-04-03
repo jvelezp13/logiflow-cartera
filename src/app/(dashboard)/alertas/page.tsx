@@ -20,11 +20,13 @@ import type {
 } from "@/lib/queries/alertas-server";
 import { getVentasResumenClientes } from "@/lib/queries/cartera-server";
 import type { VentaResumenCliente } from "@/lib/queries/cartera-server";
+import { getAuditoriasPendientes, getAuditoriasPendientesCount } from "@/lib/queries/auditoria-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
 import { formatCurrencyFull } from "@/lib/format";
 import { AlertasFiltros } from "@/components/alertas/alertas-filtros";
 import { TablaNovedades } from "@/components/alertas/tabla-novedades";
+import { TablaAuditorias } from "@/components/alertas/tabla-auditorias";
 import Link from "next/link";
 
 // Modos validos
@@ -42,9 +44,10 @@ export default async function AlertasPage({
     : "cupo_excedido";
 
   const necesitaVentas = modo === "cupo_excedido" || modo === "cupo_ocioso";
+  const necesitaAuditorias = modo === "novedades";
 
   // Queries en paralelo — cupo excedido y ocioso comparten UNA sola query
-  const [profile, incluirCastigada, cupo, inactivos, novedades, ventasMap] =
+  const [profile, incluirCastigada, cupo, inactivos, novedades, ventasMap, auditorias, auditoriasCount] =
     await Promise.all([
       getUserProfile(),
       getIncluirCastigada(),
@@ -52,13 +55,15 @@ export default async function AlertasPage({
       getClientesInactivos(),
       getNovedadesSync(),
       necesitaVentas ? getVentasResumenClientes() : Promise.resolve(new Map<string, VentaResumenCliente>()),
+      necesitaAuditorias ? getAuditoriasPendientes() : Promise.resolve([]),
+      necesitaAuditorias ? Promise.resolve(0) : getAuditoriasPendientesCount(),
     ]);
 
   const conteos = {
     cupo_excedido: cupo.excedido.length,
     cupo_ocioso: cupo.ocioso.length,
     inactivos: inactivos.length,
-    novedades: novedades.length,
+    novedades: novedades.length + (necesitaAuditorias ? auditorias.length : auditoriasCount),
   };
 
   return (
@@ -73,14 +78,48 @@ export default async function AlertasPage({
       <div className="p-6 space-y-4 bg-slate-50 min-h-screen">
         <AlertasFiltros conteos={conteos} />
 
-        <Card>
-          <CardContent className="p-0">
-            {modo === "cupo_excedido" && <TablaCupoExcedido clientes={cupo.excedido} ventasMap={ventasMap} />}
-            {modo === "cupo_ocioso" && <TablaCupoOcioso clientes={cupo.ocioso} ventasMap={ventasMap} />}
-            {modo === "inactivos" && <TablaInactivos clientes={inactivos} />}
-            {modo === "novedades" && <TablaNovedades novedades={novedades} />}
-          </CardContent>
-        </Card>
+        {modo !== "novedades" && (
+          <Card>
+            <CardContent className="p-0">
+              {modo === "cupo_excedido" && <TablaCupoExcedido clientes={cupo.excedido} ventasMap={ventasMap} />}
+              {modo === "cupo_ocioso" && <TablaCupoOcioso clientes={cupo.ocioso} ventasMap={ventasMap} />}
+              {modo === "inactivos" && <TablaInactivos clientes={inactivos} />}
+            </CardContent>
+          </Card>
+        )}
+
+        {modo === "novedades" && (
+          <div className="space-y-4">
+            {auditorias.length > 0 && (
+              <Card>
+                <CardContent className="p-0">
+                  <div className="px-4 py-2 border-b bg-amber-50/50">
+                    <h3 className="text-sm font-medium text-amber-800">
+                      Auditorias pendientes ({auditorias.length})
+                    </h3>
+                  </div>
+                  <TablaAuditorias
+                    auditorias={auditorias}
+                    userId={profile.id}
+                    userRole={profile.role}
+                  />
+                </CardContent>
+              </Card>
+            )}
+            <Card>
+              <CardContent className="p-0">
+                {auditorias.length > 0 && novedades.length > 0 && (
+                  <div className="px-4 py-2 border-b bg-slate-50/50">
+                    <h3 className="text-sm font-medium text-slate-600">
+                      Facturas sin resolver
+                    </h3>
+                  </div>
+                )}
+                <TablaNovedades novedades={novedades} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </>
   );

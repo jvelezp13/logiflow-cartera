@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
+import { ensureWriteAccess } from "@/lib/auth/types";
 import { revalidatePath } from "next/cache";
 import { generarUrlSubida, generarUrlLectura, eliminarObjeto } from "@/lib/r2";
 import { extraerDatosSoporte, type DatosSoporte } from "@/lib/ai-extraction";
@@ -10,14 +11,9 @@ import { getHistorialPago } from "@/lib/queries/pagos-server";
 import { syncFetch } from "@/lib/sync-client";
 import { formatCurrencyFull } from "@/lib/format";
 import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
-import { PAGO_ESTADO, PAGO_DATA_ORIGIN, PAGO_TIPO } from "@/lib/pagos-constants";
+import { PAGO_ESTADO, PAGO_DATA_ORIGIN, PAGO_TIPO, AUDITORIA_TIPO, type AuditoriaTipo } from "@/lib/pagos-constants";
 
 // --- Helpers ---
-
-function ensureWriteAccess(role: string): string | null {
-  if (role === "viewer") return "No tienes permiso para realizar esta accion";
-  return null;
-}
 
 function parseVouchers(csv: string): string[] {
   return csv.split(",").map((v) => v.trim()).filter(Boolean).slice(0, 4);
@@ -44,6 +40,32 @@ function validarFechaConsignacion(fecha: string): string | null {
   if (fecha > hoy) return "La fecha de consignación no puede ser futura";
   if (fecha < haceUnAno) return "La fecha de consignación no puede ser mayor a 1 año";
   return null;
+}
+
+interface EventoAuditoriaParams {
+  tenantId: string;
+  pagoId: string;
+  tipo: AuditoriaTipo;
+  descripcion: string;
+  datos?: Record<string, unknown>;
+  createdBy: string;
+}
+
+async function crearEventoAuditoria(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: EventoAuditoriaParams
+): Promise<void> {
+  const { error } = await supabase
+    .from("auditoria_pagos")
+    .insert({
+      tenant_id: params.tenantId,
+      pago_id: params.pagoId,
+      tipo: params.tipo,
+      descripcion: params.descripcion,
+      datos: params.datos ?? null,
+      created_by: params.createdBy,
+    });
+  if (error) logError("crearEventoAuditoria", error);
 }
 
 // --- Types ---
@@ -486,8 +508,32 @@ export async function crearPago(
     return { error: "Error al vincular facturas — pago no fue creado" };
   }
 
+  // Fire-and-forget: detectar eventos de auditoria (batch single INSERT)
+  const auditData = (aiExtraction as Record<string, unknown>)?._audit as Record<string, unknown> | undefined;
+  const eventosInsert: { tenant_id: string; pago_id: string; tipo: AuditoriaTipo; descripcion: string; datos: Record<string, unknown> | null; created_by: string }[] = [];
+
+  if (auditData?.voucher_compartido) {
+    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.VOUCHER_COMPARTIDO, descripcion: `Pago con voucher compartido — cliente ${codigoCliente}`, datos: { vouchers, pagos_relacionados: auditData.pagos_relacionados }, created_by: profile.id });
+  }
+  if (esRetroactivo && auditData?.monto_modificado_vs_sync) {
+    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.MONTO_DIFF_SYNC, descripcion: `Monto retroactivo difiere del ERP — cliente ${codigoCliente}`, datos: { sync_monto: auditData.sync_monto, monto_usuario: montoTotal }, created_by: profile.id });
+  }
+  if (auditData?.monto_modificado && auditData?.monto_ia) {
+    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.MONTO_DIFF_IA, descripcion: `Monto difiere de extraccion IA — cliente ${codigoCliente}`, datos: { monto_ia: auditData.monto_ia, monto_usuario: montoTotal }, created_by: profile.id });
+  }
+  if (!soporteKey) {
+    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.PAGO_SIN_SOPORTE, descripcion: `Pago registrado sin soporte — cliente ${codigoCliente}`, datos: { monto: montoTotal }, created_by: profile.id });
+  }
+
+  if (eventosInsert.length > 0) {
+    Promise.resolve(supabase.from("auditoria_pagos").upsert(eventosInsert, { onConflict: "pago_id,tipo", ignoreDuplicates: true }))
+      .then(({ error }) => { if (error) logError("crearPago:auditoria", error); })
+      .catch((e: unknown) => logError("crearPago:auditoria", e));
+  }
+
   revalidatePath(`/clientes/${codigoCliente}`);
   revalidatePath("/pagos");
+  if (eventosInsert.length > 0) revalidatePath("/alertas");
 
   // Fire-and-forget: disparar sync de cartera post-pago
   if (process.env.SYNC_API_URL) {
@@ -708,6 +754,23 @@ export async function editarPago(
       .from("pagos_historial")
       .insert(historialInserts);
     if (histError) logError("editarPago:historial", histError);
+  }
+
+  // Fire-and-forget: auditoria si monto cambio
+  if (cambios.monto_total !== undefined) {
+    const montoAnterior = Number(actual.monto_total);
+    const montoNuevo = Number(cambios.monto_total);
+    if (Math.abs(montoNuevo - montoAnterior) > 1) {
+      crearEventoAuditoria(supabase, {
+        tenantId: profile.tenant_id,
+        pagoId: pagoId,
+        tipo: AUDITORIA_TIPO.MONTO_EDITADO,
+        descripcion: `Monto editado post-registro — cliente ${actual.codigo_cliente}`,
+        datos: { monto_anterior: montoAnterior, monto_nuevo: montoNuevo },
+        createdBy: profile.id,
+      }).catch((e) => logError("editarPago:auditoria", e));
+      revalidatePath("/alertas");
+    }
   }
 
   revalidatePath(`/clientes/${actual.codigo_cliente}`);

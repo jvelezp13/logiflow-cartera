@@ -10,3 +10,8 @@ export interface AppPermission {
   app_id: string;
   role: AppRole;
 }
+
+export function ensureWriteAccess(role: AppRole): string | null {
+  if (role === "viewer") return "No tienes permiso para realizar esta accion";
+  return null;
+}
