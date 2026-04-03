@@ -22,7 +22,7 @@ import { getVentasResumenClientes } from "@/lib/queries/cartera-server";
 import type { VentaResumenCliente } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { formatCurrencyFull, formatCurrencyShort } from "@/lib/format";
+import { formatCurrencyFull } from "@/lib/format";
 import { AlertasFiltros } from "@/components/alertas/alertas-filtros";
 import { TablaNovedades } from "@/components/alertas/tabla-novedades";
 import Link from "next/link";
@@ -184,7 +184,7 @@ function TablaCupoExcedido({ clientes, ventasMap }: { clientes: ClienteCupoAlert
                   {formatCurrencyFull(c.total_deuda)}
                 </TableCell>
                 <TableCell className="text-right text-sm tabular-nums py-1.5 text-slate-600">
-                  {ventas ? formatCurrencyShort(ventas.ventaPromedio) : "-"}
+                  {ventas ? formatCurrencyFull(ventas.ventaPromedio) : "-"}
                 </TableCell>
                 <TableCell className="py-1.5">
                   <div className="space-y-1">
@@ -257,7 +257,7 @@ function TablaCupoOcioso({ clientes, ventasMap }: { clientes: ClienteCupoOcioso[
                   {formatCurrencyFull(c.total_deuda)}
                 </TableCell>
                 <TableCell className="text-right text-sm tabular-nums py-1.5 text-slate-600">
-                  {ventas ? formatCurrencyShort(ventas.ventaPromedio) : "-"}
+                  {ventas ? formatCurrencyFull(ventas.ventaPromedio) : "-"}
                 </TableCell>
                 <TableCell className="py-1.5">
                   <div className="space-y-1">
