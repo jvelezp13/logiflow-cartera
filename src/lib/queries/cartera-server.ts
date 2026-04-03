@@ -585,6 +585,56 @@ export async function getClientesCreditoAnulado(): Promise<ClienteCredito[]> {
   return enriquecerConMaestra(creditoData || [], supabase, tenantId);
 }
 
+// --- Ventas ---
+
+export interface VentaResumenCliente {
+  ventaPorMes: { mes: string; venta: number }[];
+  ventaPromedio: number;
+}
+
+/**
+ * Resumen de ventas por cliente (ultimos N meses).
+ * Sin codigo: trae todos (para alertas). Con codigo: uno solo (para detalle).
+ * Retorna Map vacio si la tabla no existe (es de Sync-Logiflow).
+ */
+export async function getVentasResumenClientes(
+  codigoCliente?: string,
+  meses = 3
+): Promise<Map<string, VentaResumenCliente>> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("get_ventas_resumen_cliente", {
+    p_tenant_id: tenantId,
+    p_meses: meses,
+    p_codigo_cliente: codigoCliente ?? null,
+  });
+
+  if (error) {
+    console.warn("[ventas] get_ventas_resumen_cliente no disponible:", error.code, error.message);
+    return new Map();
+  }
+
+  const rows = (data as { codigo_cliente: string; mes: string; venta_total: number }[]) || [];
+  const map = new Map<string, VentaResumenCliente>();
+
+  for (const row of rows) {
+    let entry = map.get(row.codigo_cliente);
+    if (!entry) {
+      entry = { ventaPorMes: [], ventaPromedio: 0 };
+      map.set(row.codigo_cliente, entry);
+    }
+    entry.ventaPorMes.push({ mes: row.mes, venta: Number(row.venta_total) });
+  }
+
+  for (const entry of map.values()) {
+    const total = entry.ventaPorMes.reduce((sum, m) => sum + m.venta, 0);
+    entry.ventaPromedio = total / meses;
+  }
+
+  return map;
+}
+
 // --- Filtros ---
 
 export async function getCiudades(): Promise<string[]> {

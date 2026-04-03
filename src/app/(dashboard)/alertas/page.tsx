@@ -18,9 +18,11 @@ import type {
   ClienteCupoOcioso,
   ClienteInactivo,
 } from "@/lib/queries/alertas-server";
+import { getVentasResumenClientes } from "@/lib/queries/cartera-server";
+import type { VentaResumenCliente } from "@/lib/queries/cartera-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { formatCurrencyFull } from "@/lib/format";
+import { formatCurrencyFull, formatCurrencyShort } from "@/lib/format";
 import { AlertasFiltros } from "@/components/alertas/alertas-filtros";
 import { TablaNovedades } from "@/components/alertas/tabla-novedades";
 import Link from "next/link";
@@ -39,14 +41,17 @@ export default async function AlertasPage({
     ? (params.modo as Modo)
     : "cupo_excedido";
 
+  const necesitaVentas = modo === "cupo_excedido" || modo === "cupo_ocioso";
+
   // Queries en paralelo — cupo excedido y ocioso comparten UNA sola query
-  const [profile, incluirCastigada, cupo, inactivos, novedades] =
+  const [profile, incluirCastigada, cupo, inactivos, novedades, ventasMap] =
     await Promise.all([
       getUserProfile(),
       getIncluirCastigada(),
       getClientesCupo(),
       getClientesInactivos(),
       getNovedadesSync(),
+      necesitaVentas ? getVentasResumenClientes() : Promise.resolve(new Map<string, VentaResumenCliente>()),
     ]);
 
   const conteos = {
@@ -70,8 +75,8 @@ export default async function AlertasPage({
 
         <Card>
           <CardContent className="p-0">
-            {modo === "cupo_excedido" && <TablaCupoExcedido clientes={cupo.excedido} />}
-            {modo === "cupo_ocioso" && <TablaCupoOcioso clientes={cupo.ocioso} />}
+            {modo === "cupo_excedido" && <TablaCupoExcedido clientes={cupo.excedido} ventasMap={ventasMap} />}
+            {modo === "cupo_ocioso" && <TablaCupoOcioso clientes={cupo.ocioso} ventasMap={ventasMap} />}
             {modo === "inactivos" && <TablaInactivos clientes={inactivos} />}
             {modo === "novedades" && <TablaNovedades novedades={novedades} />}
           </CardContent>
@@ -137,7 +142,7 @@ function MensajeVacio({ texto, colSpan }: { texto: string; colSpan: number }) {
 
 // --- Tablas ---
 
-function TablaCupoExcedido({ clientes }: { clientes: ClienteCupoAlerta[] }) {
+function TablaCupoExcedido({ clientes, ventasMap }: { clientes: ClienteCupoAlerta[]; ventasMap: Map<string, VentaResumenCliente> }) {
   return (
     <Table>
       <TableHeader>
@@ -146,16 +151,18 @@ function TablaCupoExcedido({ clientes }: { clientes: ClienteCupoAlerta[] }) {
           <TableHead className="text-xs py-2">Ciudad</TableHead>
           <TableHead className="text-xs py-2 text-right">Cupo</TableHead>
           <TableHead className="text-xs py-2 text-right">Deuda</TableHead>
+          <TableHead className="text-xs py-2 text-right">Vta. prom. 3m</TableHead>
           <TableHead className="text-xs py-2 w-44">Uso cupo</TableHead>
           <TableHead className="text-xs py-2 text-center">Nivel</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {clientes.length === 0 ? (
-          <MensajeVacio texto="No hay clientes con cupo excedido (>80%)" colSpan={6} />
+          <MensajeVacio texto="No hay clientes con cupo excedido (>80%)" colSpan={7} />
         ) : (
           clientes.map((c) => {
             const badge = getNivelBadge(c.nivel);
+            const ventas = ventasMap.get(c.codigo_cliente);
             return (
               <TableRow key={c.codigo_cliente} className="hover:bg-slate-100/60">
                 <TableCell className="py-1.5">
@@ -175,6 +182,9 @@ function TablaCupoExcedido({ clientes }: { clientes: ClienteCupoAlerta[] }) {
                 </TableCell>
                 <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
                   {formatCurrencyFull(c.total_deuda)}
+                </TableCell>
+                <TableCell className="text-right text-sm tabular-nums py-1.5 text-slate-600">
+                  {ventas ? formatCurrencyShort(ventas.ventaPromedio) : "-"}
                 </TableCell>
                 <TableCell className="py-1.5">
                   <div className="space-y-1">
@@ -207,7 +217,7 @@ function TablaCupoExcedido({ clientes }: { clientes: ClienteCupoAlerta[] }) {
   );
 }
 
-function TablaCupoOcioso({ clientes }: { clientes: ClienteCupoOcioso[] }) {
+function TablaCupoOcioso({ clientes, ventasMap }: { clientes: ClienteCupoOcioso[]; ventasMap: Map<string, VentaResumenCliente> }) {
   return (
     <Table>
       <TableHeader>
@@ -216,50 +226,57 @@ function TablaCupoOcioso({ clientes }: { clientes: ClienteCupoOcioso[] }) {
           <TableHead className="text-xs py-2">Ciudad</TableHead>
           <TableHead className="text-xs py-2 text-right">Cupo</TableHead>
           <TableHead className="text-xs py-2 text-right">Deuda</TableHead>
+          <TableHead className="text-xs py-2 text-right">Vta. prom. 3m</TableHead>
           <TableHead className="text-xs py-2 w-44">Uso cupo</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {clientes.length === 0 ? (
-          <MensajeVacio texto="No hay clientes con cupo subutilizado (<50%)" colSpan={5} />
+          <MensajeVacio texto="No hay clientes con cupo subutilizado (<50%)" colSpan={6} />
         ) : (
-          clientes.map((c) => (
-            <TableRow key={c.codigo_cliente} className="hover:bg-slate-100/60">
-              <TableCell className="py-1.5">
-                <Link
-                  href={`/clientes/${c.codigo_cliente}`}
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  {c.nombre_negocio || c.codigo_cliente}
-                </Link>
-                <div className="text-xs text-slate-400">{c.codigo_cliente}</div>
-              </TableCell>
-              <TableCell className="text-xs text-slate-500 py-1.5">
-                {c.ciudad || "-"}
-              </TableCell>
-              <TableCell className="text-right text-sm tabular-nums py-1.5">
-                {formatCurrencyFull(c.cupo_asignado)}
-              </TableCell>
-              <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
-                {formatCurrencyFull(c.total_deuda)}
-              </TableCell>
-              <TableCell className="py-1.5">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 tabular-nums">
-                      {c.uso_porcentaje.toFixed(0)}%
-                    </span>
+          clientes.map((c) => {
+            const ventas = ventasMap.get(c.codigo_cliente);
+            return (
+              <TableRow key={c.codigo_cliente} className="hover:bg-slate-100/60">
+                <TableCell className="py-1.5">
+                  <Link
+                    href={`/clientes/${c.codigo_cliente}`}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    {c.nombre_negocio || c.codigo_cliente}
+                  </Link>
+                  <div className="text-xs text-slate-400">{c.codigo_cliente}</div>
+                </TableCell>
+                <TableCell className="text-xs text-slate-500 py-1.5">
+                  {c.ciudad || "-"}
+                </TableCell>
+                <TableCell className="text-right text-sm tabular-nums py-1.5">
+                  {formatCurrencyFull(c.cupo_asignado)}
+                </TableCell>
+                <TableCell className="text-right text-sm font-medium tabular-nums py-1.5">
+                  {formatCurrencyFull(c.total_deuda)}
+                </TableCell>
+                <TableCell className="text-right text-sm tabular-nums py-1.5 text-slate-600">
+                  {ventas ? formatCurrencyShort(ventas.ventaPromedio) : "-"}
+                </TableCell>
+                <TableCell className="py-1.5">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500 tabular-nums">
+                        {c.uso_porcentaje.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${getBarColorOcioso(c.uso_porcentaje)}`}
+                        style={{ width: `${Math.max(c.uso_porcentaje, 2)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${getBarColorOcioso(c.uso_porcentaje)}`}
-                      style={{ width: `${Math.max(c.uso_porcentaje, 2)}%` }}
-                    />
-                  </div>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))
+                </TableCell>
+              </TableRow>
+            );
+          })
         )}
       </TableBody>
     </Table>

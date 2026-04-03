@@ -43,6 +43,14 @@ export function formatFechaRelativa(fechaISO: string): string {
   return formatFechaLarga(fechaISO.split("T")[0]);
 }
 
+/** Mes corto desde "YYYY-MM". Ej: `"2026-03"` → `"mar"` */
+export function formatMesCorto(mes: string): string {
+  const [y, mo] = mes.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1)
+    .toLocaleDateString("es-CO", { month: "short" })
+    .replace(".", "");
+}
+
 /** Header de grupo para timeline. Ej: `Marzo 2026` */
 export function formatMesGrupo(fechaISO: string): string {
   const d = new Date(fechaISO);

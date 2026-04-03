@@ -9,12 +9,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getDetalleCliente } from "@/lib/queries/cartera-server";
+import { getDetalleCliente, getVentasResumenClientes } from "@/lib/queries/cartera-server";
 import { getNotasCliente } from "@/lib/queries/notas-server";
 import { getPagosCliente, getFacturasAbiertas } from "@/lib/queries/pagos-server";
 import { getUserProfile } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
-import { formatCurrencyFull, formatFechaLarga } from "@/lib/format";
+import { formatCurrencyFull, formatCurrencyShort, formatFechaLarga, formatMesCorto } from "@/lib/format";
 import { notFound } from "next/navigation";
 import { getSeveridad, getMoraBadgeStyles, SEVERIDAD_CONFIG, getCupoBarColor } from "@/lib/severity";
 import { BotonVolver } from "@/components/boton-volver";
@@ -37,12 +37,13 @@ export default async function DetalleClientePage({
     : undefined;
   const profile = await getUserProfile();
   const incluirCastigada = await getIncluirCastigada();
-  const [{ info, facturas: todasFacturas, pedidos }, notas, pagos, facturasAbiertas] =
+  const [{ info, facturas: todasFacturas, pedidos }, notas, pagos, facturasAbiertas, ventasMap] =
     await Promise.all([
       getDetalleCliente(codigo),
       getNotasCliente(codigo),
       getPagosCliente(codigo),
       getFacturasAbiertas(codigo),
+      getVentasResumenClientes(codigo),
     ]);
 
   if (!info) {
@@ -58,6 +59,7 @@ export default async function DetalleClientePage({
 
   const cupo = info.cupo_asignado || 0;
   const porcentajeCupo = cupo > 0 ? (info.total_deuda / cupo) * 100 : null;
+  const ventas = ventasMap.get(codigo);
 
   return (
     <>
@@ -176,6 +178,28 @@ export default async function DetalleClientePage({
                       className={`h-full rounded-full transition-all ${getCupoBarColor(porcentajeCupo!)}`}
                       style={{ width: `${Math.min(porcentajeCupo!, 100)}%` }}
                     />
+                  </div>
+                </div>
+              )}
+
+              {ventas && ventas.ventaPorMes.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-400 mb-2">Ventas recientes</p>
+                  <div className="flex items-baseline gap-4">
+                    {ventas.ventaPorMes.map((m) => (
+                      <div key={m.mes}>
+                        <p className="text-xs text-slate-400 capitalize">{formatMesCorto(m.mes)}</p>
+                        <p className="text-sm font-medium tabular-nums">
+                          {formatCurrencyShort(m.venta)}
+                        </p>
+                      </div>
+                    ))}
+                    <div className="border-l pl-4">
+                      <p className="text-xs text-slate-400">Promedio</p>
+                      <p className="text-sm font-semibold tabular-nums text-slate-700">
+                        {formatCurrencyShort(ventas.ventaPromedio)}/mes
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
