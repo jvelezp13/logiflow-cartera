@@ -35,6 +35,49 @@ import type { FacturaAbierta } from "@/lib/queries/pagos-server";
 import type { RetroactivoData } from "@/lib/pagos-action";
 import { type DatosSoporte, MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
 
+function AIExtractionBadge({ aiData }: { aiData: DatosSoporte }) {
+  const nivel = aiData.confianza.nivel;
+  const Icon = nivel === "alto" ? Check : AlertCircle;
+  const obs = aiData.observaciones?.toLowerCase() ?? "";
+  const multipleVouchers =
+    obs.includes("múltiple") ||
+    obs.includes("multiple") ||
+    obs.includes("varios") ||
+    obs.includes("más de un") ||
+    obs.includes("dos comprobante") ||
+    obs.includes("2 comprobante");
+
+  return (
+    <>
+      <div
+        className={`flex items-center gap-2 text-xs px-3 py-2 rounded-md border ${
+          nivel === "alto"
+            ? "bg-blue-50 text-blue-800 border-blue-200"
+            : nivel === "medio"
+              ? "bg-amber-50 text-amber-800 border-amber-200"
+              : "bg-red-50 text-red-800 border-red-200"
+        }`}
+      >
+        <Icon className="h-3 w-3 shrink-0" />
+        <span>
+          {nivel === "alto"
+            ? "Datos extraidos por IA — revisa y ajusta si es necesario"
+            : `Confianza ${nivel}: ${aiData.confianza.notas || "revisa los datos con cuidado"}`}
+          {aiData.observaciones && <> · {aiData.observaciones}</>}
+        </span>
+      </div>
+      {multipleVouchers && (
+        <div className="flex items-center gap-2 bg-orange-50 text-orange-800 text-xs px-3 py-2 rounded-md border border-orange-200">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          <span>
+            La IA detectó múltiples comprobantes en la imagen — solo se extrajo el principal. Verificá que el monto y voucher correspondan al pago correcto.
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
 // --- State Machine ---
 
 type Step = "idle" | "uploading" | "extracting" | "reviewing" | "done";
@@ -165,7 +208,14 @@ export function FormularioPago({
   const [state, dispatch] = useReducer(reducer, retroactivo, (retro) => ({
     ...initialState,
     ...(retro?.monto ? { montoTotal: retro.monto } : {}),
-    ...(retro ? { step: "reviewing" as Step } : {}),
+    ...(retro ? {
+      step: "reviewing" as Step,
+      facturasSeleccionadas: [{
+        no_factura: retro.factura,
+        valor_factura: parseInt(retro.monto, 10) || 0,
+        valor_aplicado: parseInt(retro.monto, 10) || 0,
+      }],
+    } : {}),
   }));
   const [actionState, formAction, isSubmitting] = useActionState(
     crearPago,
@@ -386,7 +436,11 @@ export function FormularioPago({
         value={voucherWarning ? "true" : ""}
       />
       {retroactivo && (
-        <input type="hidden" name="retroactivo" value="true" />
+        <>
+          <input type="hidden" name="retroactivo" value="true" />
+          <input type="hidden" name="sync_factura" value={retroactivo.factura} />
+          <input type="hidden" name="sync_monto" value={retroactivo.monto} />
+        </>
       )}
 
       {/* Error/warning banner */}
@@ -397,50 +451,7 @@ export function FormularioPago({
         </div>
       )}
 
-      {/* AI badge */}
-      {state.aiData && (() => {
-        const nivel = state.aiData.confianza.nivel;
-        const Icon = nivel === "alto" ? Check : AlertCircle;
-        const obs = state.aiData.observaciones?.toLowerCase() ?? "";
-        const multipleVouchers =
-          obs.includes("múltiple") ||
-          obs.includes("multiple") ||
-          obs.includes("varios") ||
-          obs.includes("más de un") ||
-          obs.includes("dos comprobante") ||
-          obs.includes("2 comprobante");
-        return (
-          <>
-            <div
-              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-md border ${
-                nivel === "alto"
-                  ? "bg-blue-50 text-blue-800 border-blue-200"
-                  : nivel === "medio"
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : "bg-red-50 text-red-800 border-red-200"
-              }`}
-            >
-              <Icon className="h-3 w-3 shrink-0" />
-              <span>
-                {nivel === "alto"
-                  ? "Datos extraidos por IA — revisa y ajusta si es necesario"
-                  : `Confianza ${nivel}: ${state.aiData.confianza.notas || "revisa los datos con cuidado"}`}
-                {state.aiData.observaciones && (
-                  <> · {state.aiData.observaciones}</>
-                )}
-              </span>
-            </div>
-            {multipleVouchers && (
-              <div className="flex items-center gap-2 bg-orange-50 text-orange-800 text-xs px-3 py-2 rounded-md border border-orange-200">
-                <AlertCircle className="h-3 w-3 shrink-0" />
-                <span>
-                  La IA detectó múltiples comprobantes en la imagen — solo se extrajo el principal. Verificá que el monto y voucher correspondan al pago correcto.
-                </span>
-              </div>
-            )}
-          </>
-        );
-      })()}
+      {state.aiData && <AIExtractionBadge aiData={state.aiData} />}
 
       {/* Form fields */}
       <div className="grid grid-cols-2 gap-3">

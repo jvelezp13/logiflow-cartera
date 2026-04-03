@@ -45,6 +45,7 @@ export interface NovedadSync {
   datos: Record<string, unknown> | null;
   created_at: string;
   leida: boolean;
+  nombre_negocio?: string | null;
 }
 
 // Tipos de novedades de cartera relevantes
@@ -200,5 +201,36 @@ export async function getNovedadesSync(): Promise<NovedadSync[]> {
     return [];
   }
 
-  return (data as NovedadSync[]) || [];
+  const novedades = (data as NovedadSync[]) || [];
+
+  // Enriquecer en paralelo: filtrar facturas ya pagadas + resolver nombres de clientes
+  const facturasPagadas = novedades
+    .filter((n) => n.tipo === "cartera_factura_pagada" && n.datos?.no_factura)
+    .map((n) => String(n.datos!.no_factura));
+  const codigos = [...new Set(novedades.map((n) => n.referencia).filter(Boolean))] as string[];
+
+  const [pagosRes, clientesRes] = await Promise.all([
+    facturasPagadas.length > 0
+      ? supabase.from("pago_facturas").select("no_factura").in("no_factura", facturasPagadas)
+      : Promise.resolve({ data: [] as { no_factura: string }[] }),
+    codigos.length > 0
+      ? supabase.from("vista_cliente_resumen").select("codigo_cliente, nombre_negocio").eq("tenant_id", tenantId).in("codigo_cliente", codigos)
+      : Promise.resolve({ data: [] as { codigo_cliente: string; nombre_negocio: string | null }[] }),
+  ]);
+
+  const setConPago = new Set((pagosRes.data || []).map((r) => r.no_factura));
+  const nombresMap = new Map((clientesRes.data || []).map((c) => [c.codigo_cliente, c.nombre_negocio]));
+
+  const resultado = novedades.filter((n) => {
+    if (n.tipo === "cartera_factura_pagada" && n.datos?.no_factura) {
+      return !setConPago.has(String(n.datos.no_factura));
+    }
+    return true;
+  });
+
+  for (const n of resultado) {
+    if (n.referencia) n.nombre_negocio = nombresMap.get(n.referencia) ?? null;
+  }
+
+  return resultado;
 }

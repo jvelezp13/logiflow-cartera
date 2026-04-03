@@ -19,8 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Pencil, CheckCircle2, AlertCircle, Upload, ImageIcon, History } from "lucide-react";
-import { editarPago, reemplazarSoporte, obtenerUrlSubida, obtenerHistorialPago } from "@/lib/pagos-action";
-import { comprimirImagen } from "@/lib/image-compression";
+import { editarPago, reemplazarSoporte, obtenerHistorialPago } from "@/lib/pagos-action";
+import { uploadSoporte } from "@/lib/upload-soporte";
 import { formatCurrencyFull, formatFechaRelativa } from "@/lib/format";
 import { MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
 import type { PagoResumen, HistorialEntry } from "@/lib/queries/pagos-server";
@@ -69,28 +69,11 @@ export function EditarPagoDialog({ pago }: EditarPagoDialogProps) {
     setSoporteUploading(true);
     setSoporteResult(null);
     try {
-      const compressed = await comprimirImagen(file);
-      const { uploadUrl, objectKey, error: urlError } = await obtenerUrlSubida(
-        pago.codigo_cliente,
-        file.name
-      );
-      if (urlError || !uploadUrl || !objectKey) {
-        setSoporteResult({ error: urlError || "Error al generar URL" });
-        return;
-      }
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: compressed,
-        headers: { "Content-Type": "image/webp" },
-      });
-      if (!uploadRes.ok) {
-        setSoporteResult({ error: "Error al subir archivo" });
-        return;
-      }
-      const res = await reemplazarSoporte(pago.id, objectKey, file.name);
+      const { objectKey, fileName } = await uploadSoporte(pago.codigo_cliente, file);
+      const res = await reemplazarSoporte(pago.id, objectKey, fileName);
       setSoporteResult(res);
-    } catch {
-      setSoporteResult({ error: "Error al reemplazar soporte" });
+    } catch (e) {
+      setSoporteResult({ error: e instanceof Error ? e.message : "Error al reemplazar soporte" });
     } finally {
       setSoporteUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

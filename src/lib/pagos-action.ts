@@ -10,11 +10,32 @@ import { getHistorialPago } from "@/lib/queries/pagos-server";
 import { syncFetch } from "@/lib/sync-client";
 import { formatCurrencyFull } from "@/lib/format";
 import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
+import { PAGO_ESTADO, PAGO_DATA_ORIGIN, PAGO_TIPO } from "@/lib/pagos-constants";
 
 // --- Helpers ---
 
+function ensureWriteAccess(role: string): string | null {
+  if (role === "viewer") return "No tienes permiso para realizar esta accion";
+  return null;
+}
+
 function parseVouchers(csv: string): string[] {
   return csv.split(",").map((v) => v.trim()).filter(Boolean).slice(0, 4);
+}
+
+function enriquecerAuditRetroactivo(
+  audit: Record<string, unknown>,
+  formData: FormData,
+  montoTotal: number
+) {
+  audit.pago_retroactivo = true;
+  const syncFactura = formData.get("sync_factura") as string | null;
+  const syncMonto = formData.get("sync_monto") as string | null;
+  if (syncFactura) audit.sync_factura = syncFactura;
+  if (syncMonto) {
+    audit.sync_monto = Number(syncMonto);
+    audit.monto_modificado_vs_sync = Math.abs(montoTotal - Number(syncMonto)) > 1;
+  }
 }
 
 function validarFechaConsignacion(fecha: string): string | null {
@@ -85,9 +106,8 @@ export async function obtenerUrlSubida(
 ): Promise<UrlSubidaResult> {
   try {
     const profile = await getUserProfile();
-    if (profile.role === "viewer") {
-      return { error: "No tienes permiso para subir soportes" };
-    }
+    const writeError = ensureWriteAccess(profile.role);
+    if (writeError) return { error: writeError };
 
     const { uploadUrl, objectKey } = await generarUrlSubida(
       profile.tenant_id,
@@ -110,9 +130,8 @@ export async function extraerDatos(
 ): Promise<ExtraccionResult> {
   try {
     const profile = await getUserProfile();
-    if (profile.role === "viewer") {
-      return { error: "No tienes permiso" };
-    }
+    const writeError = ensureWriteAccess(profile.role);
+    if (writeError) return { error: writeError };
 
     if (!objectKey.startsWith(`${profile.tenant_id}/`)) {
       return { error: "No tienes acceso a este recurso" };
@@ -182,10 +201,8 @@ export async function crearPago(
   formData: FormData
 ): Promise<PagoActionState> {
   const profile = await getUserProfile();
-
-  if (profile.role === "viewer") {
-    return { error: "No tienes permiso para registrar pagos" };
-  }
+  const writeError = ensureWriteAccess(profile.role);
+  if (writeError) return { error: writeError };
 
   // --- Parse FormData ---
   const codigoCliente = formData.get("codigo_cliente") as string;
@@ -310,7 +327,7 @@ export async function crearPago(
         : null;
 
     const audit: Record<string, unknown> = {
-      data_origin: "ai_assisted" as const,
+      data_origin: PAGO_DATA_ORIGIN.AI_ASSISTED,
     };
 
     if (aiMonto !== null && !Number.isNaN(aiMonto) && aiMonto > 0) {
@@ -340,11 +357,11 @@ export async function crearPago(
       audit.medio_pago_modificado = medioPago !== null && medioPago !== aiMedio;
     }
 
-    if (esRetroactivo) audit.pago_retroactivo = true;
+    if (esRetroactivo) enriquecerAuditRetroactivo(audit, formData, montoTotal);
     aiExtraction = { ...aiExtraction, _audit: audit };
   } else {
-    const manualAudit: Record<string, unknown> = { data_origin: "manual" };
-    if (esRetroactivo) manualAudit.pago_retroactivo = true;
+    const manualAudit: Record<string, unknown> = { data_origin: PAGO_DATA_ORIGIN.MANUAL };
+    if (esRetroactivo) enriquecerAuditRetroactivo(manualAudit, formData, montoTotal);
     aiExtraction = { _audit: manualAudit };
   }
 
@@ -399,7 +416,7 @@ export async function crearPago(
   }
 
   // Determinar estado
-  const estado = recaudo !== null && recibo !== null ? "verificado" : "registrado";
+  const estado = recaudo !== null && recibo !== null ? PAGO_ESTADO.VERIFICADO : PAGO_ESTADO.REGISTRADO;
 
   async function cleanupR2() {
     if (!soporteKey) return;
@@ -491,10 +508,8 @@ export async function completarCodigosCRM(
   data: { numero_recaudo?: number; numero_recibo?: number }
 ): Promise<PagoActionState> {
   const profile = await getUserProfile();
-
-  if (profile.role === "viewer") {
-    return { error: "No tienes permiso" };
-  }
+  const writeError = ensureWriteAccess(profile.role);
+  if (writeError) return { error: writeError };
 
   const supabase = await createClient();
 
@@ -513,7 +528,7 @@ export async function completarCodigosCRM(
   const nuevoRecaudo = data.numero_recaudo ?? pagoActual.numero_recaudo;
   const nuevoRecibo = data.numero_recibo ?? pagoActual.numero_recibo;
   const nuevoEstado =
-    nuevoRecaudo !== null && nuevoRecibo !== null ? "verificado" : "registrado";
+    nuevoRecaudo !== null && nuevoRecibo !== null ? PAGO_ESTADO.VERIFICADO : PAGO_ESTADO.REGISTRADO;
 
   const { error: updateError } = await supabase
     .from("pagos")
@@ -543,10 +558,8 @@ export async function eliminarPago(
   pagoId: string
 ): Promise<PagoActionState> {
   const profile = await getUserProfile();
-
-  if (profile.role === "viewer") {
-    return { error: "No tienes permiso" };
-  }
+  const writeError = ensureWriteAccess(profile.role);
+  if (writeError) return { error: writeError };
 
   const supabase = await createClient();
 
@@ -616,9 +629,8 @@ export async function editarPago(
   cambios: Partial<Record<CampoEditable, unknown>>
 ): Promise<PagoActionState> {
   const profile = await getUserProfile();
-  if (profile.role === "viewer") {
-    return { error: "No tienes permiso para editar pagos" };
-  }
+  const writeError = ensureWriteAccess(profile.role);
+  if (writeError) return { error: writeError };
 
   const supabase = await createClient();
 
@@ -713,9 +725,8 @@ export async function reemplazarSoporte(
   nuevoSoporteNombre: string
 ): Promise<PagoActionState> {
   const profile = await getUserProfile();
-  if (profile.role === "viewer") {
-    return { error: "No tienes permiso" };
-  }
+  const writeError = ensureWriteAccess(profile.role);
+  if (writeError) return { error: writeError };
 
   if (!nuevoSoporteKey.startsWith(`${profile.tenant_id}/`)) {
     return { error: "No tienes acceso a este recurso" };
@@ -781,4 +792,100 @@ export async function reemplazarSoporte(
  */
 export async function obtenerHistorialPago(pagoId: string) {
   return getHistorialPago(pagoId);
+}
+
+// --- Nota Credito desde Novedades ---
+
+export interface NotaCreditoResult {
+  success?: boolean;
+  error?: string;
+}
+
+/**
+ * Crea una nota credito para justificar una factura que desaparecio del ERP
+ * sin registro de pago. Reutiliza la tabla pagos con tipo='nota_credito'.
+ */
+export async function crearNotaCredito(
+  _prev: NotaCreditoResult | null,
+  formData: FormData
+): Promise<NotaCreditoResult> {
+  const profile = await getUserProfile();
+  const writeError = ensureWriteAccess(profile.role);
+  if (writeError) return { error: writeError };
+
+  const codigoCliente = formData.get("codigo_cliente") as string;
+  const noFactura = formData.get("no_factura") as string;
+  const montoStr = formData.get("monto") as string;
+  const observaciones = formData.get("observaciones") as string;
+  const soporteKey = formData.get("soporte_key") as string | null;
+  const soporteNombre = formData.get("soporte_nombre") as string | null;
+
+  if (!codigoCliente || !noFactura) {
+    return { error: "Faltan datos de cliente o factura" };
+  }
+
+  const monto = parseFloat(montoStr);
+  if (!monto || monto <= 0) {
+    return { error: "El monto debe ser mayor a 0" };
+  }
+
+  if (!soporteKey) {
+    return { error: "Debe adjuntar el soporte de la nota credito" };
+  }
+
+  const supabase = await createClient();
+
+  // Insert pago tipo nota_credito
+  const { data: pago, error: pagoError } = await supabase
+    .from("pagos")
+    .insert({
+      tenant_id: profile.tenant_id,
+      codigo_cliente: codigoCliente,
+      fecha_consignacion: new Date().toISOString().slice(0, 10),
+      monto_total: monto,
+      tipo: PAGO_TIPO.NOTA_CREDITO,
+      observaciones,
+      soporte_url: `r2://${soporteKey}`,
+      soporte_key: soporteKey,
+      soporte_nombre: soporteNombre,
+      estado: PAGO_ESTADO.REGISTRADO,
+      ai_extraction: {
+        _audit: {
+          data_origin: PAGO_DATA_ORIGIN.MANUAL,
+          tipo_registro: PAGO_TIPO.NOTA_CREDITO,
+          sync_factura: noFactura,
+          sync_monto: monto,
+        },
+      },
+      created_by: profile.id,
+    })
+    .select("id")
+    .single();
+
+  if (pagoError) {
+    logError("crearNotaCredito:insert", pagoError);
+    return { error: "Error al registrar la nota credito" };
+  }
+
+  // Vincular factura para que desaparezca de novedades
+  const { error: facturaError } = await supabase
+    .from("pago_facturas")
+    .insert({
+      pago_id: pago.id,
+      no_factura: noFactura,
+      valor_factura: monto,
+      valor_aplicado: monto,
+    });
+
+  if (facturaError) {
+    logError("crearNotaCredito:insert_factura", facturaError);
+    await Promise.all([
+      supabase.from("pagos").delete().eq("id", pago.id).eq("tenant_id", profile.tenant_id),
+      soporteKey ? eliminarObjeto(soporteKey).catch((e) => logError("crearNotaCredito:cleanup_r2", e)) : Promise.resolve(),
+    ]);
+    return { error: "Error al vincular factura — nota credito no fue creada" };
+  }
+
+  revalidatePath("/alertas");
+  return { success: true };
 }

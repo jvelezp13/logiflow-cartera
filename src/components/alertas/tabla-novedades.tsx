@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, CheckCheck } from "lucide-react";
-import { marcarAlertaLeida, marcarTodasLeidas } from "@/lib/alertas-action";
-import { formatFechaCorta } from "@/lib/format";
+import { Check } from "lucide-react";
+import { marcarAlertaLeida } from "@/lib/alertas-action";
+import { formatFechaRelativa, formatCurrencyFull } from "@/lib/format";
 import Link from "next/link";
 
 import type { NovedadSync } from "@/lib/queries/alertas-server";
+import { DialogNotaCredito } from "@/components/alertas/dialog-nota-credito";
 
 const TIPO_BADGE: Record<string, { label: string; classes: string }> = {
   cartera_factura_pagada: { label: "Pago", classes: "bg-green-100 text-green-700 border-green-200" },
@@ -33,32 +34,13 @@ function getTipoBadge(tipo: string) {
 
 export function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
   const [isPending, startTransition] = useTransition();
-  const sinLeer = novedades.filter((n) => !n.leida).length;
 
   function handleMarcarLeida(id: string) {
     startTransition(async () => { await marcarAlertaLeida(id); });
   }
 
-  function handleMarcarTodas() {
-    startTransition(async () => { await marcarTodasLeidas(); });
-  }
-
   return (
     <div className="space-y-2">
-      {sinLeer > 0 && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleMarcarTodas}
-            disabled={isPending}
-            className="text-xs text-slate-500 h-7"
-          >
-            <CheckCheck className="h-3.5 w-3.5 mr-1" />
-            Marcar todas como leidas ({sinLeer})
-          </Button>
-        </div>
-      )}
       <Table>
         <TableHeader>
           <TableRow>
@@ -85,7 +67,7 @@ export function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
                   className={`hover:bg-slate-100/60 ${n.leida ? "opacity-50" : ""}`}
                 >
                   <TableCell className="text-xs text-slate-500 tabular-nums py-1.5">
-                    {formatFechaCorta(n.created_at)}
+                    {formatFechaRelativa(n.created_at)}
                   </TableCell>
                   <TableCell className="py-1.5">
                     <Badge variant="outline" className={badge.classes}>
@@ -93,28 +75,63 @@ export function TablaNovedades({ novedades }: { novedades: NovedadSync[] }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm py-1.5">
-                    <div>{n.mensaje || "-"}</div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      {n.referencia && (
-                        <Link
-                          href={`/clientes/${n.referencia}`}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          {n.referencia}
-                        </Link>
-                      )}
-                      {esFacturaPagada && n.referencia && (
-                        <Link
-                          href={`/clientes/${n.referencia}?registrar_pago=retroactivo&factura=${n.datos?.no_factura || ""}&monto=${n.datos?.total || ""}`}
-                          className="text-xs text-emerald-600 hover:underline font-medium"
-                        >
-                          Registrar pago
-                        </Link>
-                      )}
-                    </div>
+                    {esFacturaPagada ? (
+                      <>
+                        <div>
+                          Factura <span className="font-medium">{String(n.datos?.no_factura || "?")}</span>
+                          {" — pagada en ERP sin registro en Cartera"}
+                          {n.datos?.total != null && (
+                            <span className="text-slate-500"> — {formatCurrencyFull(Number(n.datos.total))}</span>
+                          )}
+                        </div>
+                        {n.referencia && (
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <Link
+                              href={`/clientes/${n.referencia}`}
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              {n.referencia}
+                              {n.nombre_negocio && (
+                                <span className="text-slate-400 ml-1">— {n.nombre_negocio}</span>
+                              )}
+                            </Link>
+                            <Link
+                              href={`/clientes/${n.referencia}?registrar_pago=retroactivo&factura=${n.datos?.no_factura || ""}&monto=${n.datos?.total || ""}`}
+                              className="text-xs text-amber-600 hover:underline font-medium"
+                            >
+                              Registrar pago
+                            </Link>
+                            {n.datos?.no_factura != null && (
+                              <DialogNotaCredito
+                                codigoCliente={n.referencia}
+                                noFactura={String(n.datos.no_factura)}
+                                monto={Number(n.datos.total || 0)}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div>{n.mensaje || "-"}</div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          {n.referencia && (
+                            <Link
+                              href={`/clientes/${n.referencia}`}
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              {n.referencia}
+                              {n.nombre_negocio && (
+                                <span className="text-slate-400 ml-1">— {n.nombre_negocio}</span>
+                              )}
+                            </Link>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </TableCell>
                   <TableCell className="py-1.5">
-                    {!n.leida && (
+                    {!n.leida && !esFacturaPagada && (
                       <Button
                         variant="ghost"
                         size="icon"
