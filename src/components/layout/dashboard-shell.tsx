@@ -18,7 +18,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         open={mobileOpen}
         onOpenChange={setMobileOpen}
       />
-      <main className="flex-1 overflow-auto bg-slate-50">{children}</main>
+      <main className="flex-1 overflow-auto overscroll-none bg-slate-50">{children}</main>
     </div>
   );
 }
