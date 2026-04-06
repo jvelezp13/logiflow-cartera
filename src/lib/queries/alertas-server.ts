@@ -5,6 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
 import { getIncluirCastigada } from "@/lib/castigada";
+import { logError } from "@/lib/logger";
 
 // --- Tipos ---
 
@@ -209,24 +210,43 @@ export async function getNovedadesSync(): Promise<NovedadSync[]> {
     .map((n) => String(n.datos!.no_factura));
   const codigos = [...new Set(novedades.map((n) => n.referencia).filter(Boolean))] as string[];
 
-  const [pagosRes, clientesRes] = await Promise.all([
+  const [pagosRes, clientesRes, carteraRes] = await Promise.all([
     facturasPagadas.length > 0
       ? supabase.from("pago_facturas").select("no_factura").in("no_factura", facturasPagadas)
       : Promise.resolve({ data: [] as { no_factura: string }[] }),
     codigos.length > 0
       ? supabase.from("vista_cliente_resumen").select("codigo_cliente, nombre_negocio").eq("tenant_id", tenantId).in("codigo_cliente", codigos)
       : Promise.resolve({ data: [] as { codigo_cliente: string; nombre_negocio: string | null }[] }),
+    facturasPagadas.length > 0
+      ? supabase.from("cartera").select("no_factura").eq("tenant_id", tenantId).in("no_factura", facturasPagadas).gt("total", 0)
+      : Promise.resolve({ data: [] as { no_factura: string }[] }),
   ]);
 
   const setConPago = new Set((pagosRes.data || []).map((r) => r.no_factura));
+  const setEnCartera = new Set((carteraRes.data || []).map((r) => r.no_factura));
   const nombresMap = new Map((clientesRes.data || []).map((c) => [c.codigo_cliente, c.nombre_negocio]));
 
-  const resultado = novedades.filter((n) => {
+  // Facturas que volvieron a cartera (planilla anulada resuelta) — marcar como leidas
+  const idsAutoLeidas: string[] = [];
+  const resultado: NovedadSync[] = [];
+
+  for (const n of novedades) {
     if (n.tipo === "cartera_factura_pagada" && n.datos?.no_factura) {
-      return !setConPago.has(String(n.datos.no_factura));
+      const fac = String(n.datos.no_factura);
+      if (setConPago.has(fac)) continue;
+      if (setEnCartera.has(fac)) { idsAutoLeidas.push(n.id); continue; }
     }
-    return true;
-  });
+    resultado.push(n);
+  }
+
+  if (idsAutoLeidas.length > 0) {
+    supabase
+      .from("sync_alertas")
+      .update({ leida: true })
+      .eq("tenant_id", tenantId)
+      .in("id", idsAutoLeidas)
+      .then(null, (err) => logError("[alertas] auto-marcar leidas", err));
+  }
 
   for (const n of resultado) {
     if (n.referencia) n.nombre_negocio = nombresMap.get(n.referencia) ?? null;
