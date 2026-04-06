@@ -14,7 +14,7 @@ export type MedioDePago = (typeof MEDIOS_DE_PAGO)[number];
 export const soporteSchema = z.object({
   extraccion_exitosa: z
     .boolean()
-    .describe("true si se pudieron extraer datos del soporte, false si no"),
+    .describe("true si la imagen contiene un comprobante de pago y se pudieron extraer datos. false si la imagen NO es un documento financiero/transaccional."),
   tipo_documento: z
     .string()
     .nullable()
@@ -78,7 +78,7 @@ export const soporteSchema = z.object({
     nivel: z
       .enum(["alto", "medio", "bajo"])
       .describe(
-        "alto: todos los campos claros. medio: algun campo requirio interpretacion. bajo: uno o mas campos inciertos."
+        "Evaluar segun las reglas de confianza del system prompt."
       ),
     notas: z
       .string()
@@ -114,6 +114,18 @@ export function calcularMontoExtraido(extraction: {
 
 const SYSTEM_PROMPT = `Eres un sistema especializado en extraer datos estructurados de imágenes de soportes de pago colombianos. Estos soportes son comprobantes de consignaciones, transferencias o recaudos realizados por clientes a favor de **Nexo Distribuciones SAS** o al convenio de **Servicios Nutresa**.
 
+## Paso 0 — Validar que la imagen es un comprobante de pago
+
+ANTES de extraer datos, determinar si la imagen contiene un documento financiero o transaccional (tirilla, comprobante, recibo, captura de app bancaria, notificación de pago, etc.).
+
+Si la imagen NO es un documento financiero — por ejemplo: foto personal, meme, paisaje, documento de identidad, factura de venta (no comprobante de pago), imagen en blanco, screenshot de conversación sin comprobante visible — devolver:
+- extraccion_exitosa: false
+- observaciones: describir qué contiene la imagen
+- Todos los campos de datos en null
+- confianza nivel "bajo", notas: "La imagen no contiene un comprobante de pago"
+
+Si la imagen es un screenshot de WhatsApp u otra app de mensajería que CONTIENE un comprobante de pago visible dentro de la conversación, extraer el comprobante normalmente. Reportar en observaciones "Comprobante extraído de screenshot de conversación".
+
 ## Paso 1 — Identificar el DESTINO del pago (define medio_de_pago)
 
 Esta es la regla más importante. El medio_de_pago se determina por A DÓNDE fue el pago:
@@ -132,6 +144,8 @@ Regla general para combinaciones no listadas:
 - Directo a cuenta Nexo en Bancolombia → Bancolombia Nexo
 - Cualquier canal Davivienda → Davivienda Nexo
 - No determinable → null en medio_de_pago, explicar en observaciones
+
+Si el comprobante muestra un pago a un destino que NO es Nexo ni Nutresa (ej: pago a Claro, EPM, otra empresa), extraer los datos normalmente pero advertir en observaciones: "El pago no parece ser a favor de Nexo/Nutresa — verificar destinatario". Establecer confianza "bajo".
 
 ## Paso 2 — Extraer numero_voucher según el banco
 
@@ -152,17 +166,52 @@ Si el banco no está en esta tabla, buscar el campo que funcione como identifica
 ## Paso 3 — Reglas de extracción
 
 1. **Valores monetarios**: En Colombia, punto = separador de miles, coma = decimales. "$1.282.500,00" = 1282500. Siempre devolver número entero sin decimales.
-2. **Fechas**: Convertir siempre a YYYY-MM-DD. Meses en español: ENE, FEB, MAR, ABR, MAY, JUN, JUL, AGO, SEP, OCT, NOV, DIC.
+2. **Fechas**: Convertir siempre a YYYY-MM-DD. Meses en español: ENE, FEB, MAR, ABR, MAY, JUN, JUL, AGO, SEP, OCT, NOV, DIC. Si la fecha extraída es futura (posterior a hoy), reportar en observaciones "Fecha extraída es futura — posible error de lectura" y establecer confianza "medio".
 3. **Número de voucher**: Extraer como string. PRESERVAR ceros a la izquierda: "008863" se mantiene como "008863".
 4. **Imágenes con ruido**: Sombras, reflejos, fondos de escritorio, texto manuscrito — extraer solo datos del soporte impreso.
 5. **Documentos rotados**: Leer en orientación correcta sin reportar error.
 6. **Texto manuscrito**: Reportar en observaciones, NO mezclar con datos extraídos del documento impreso.
 7. **Múltiples documentos**: Extraer el soporte principal (más completo/legible) en \`datos\`. Si hay otros comprobantes de pago visibles en la misma imagen, extraer su valor_pagado y numero_voucher en \`documentos_adicionales\`. El sistema sumará los montos automáticamente.
 8. **Soporte junto a factura**: Ignorar la factura, extraer solo el comprobante de pago.
+9. **Montos sospechosos**: Si el monto extraído es 0, negativo, o superior a $100.000.000, reportar en observaciones y establecer confianza "bajo".
 
-## Fallback para documentos desconocidos
+## Paso 4 — Nivel de confianza
 
-Si el soporte no coincide con ningún banco o formato conocido, NO devolver extraccion_exitosa: false. Intentar extraer los datos con conocimiento general: buscar fecha, monto, y un identificador de transacción. Usar las reglas del Paso 1 para clasificar medio_de_pago si es posible. Establecer confianza nivel "medio" o "bajo" y explicar en observaciones qué tipo de documento parece ser.`;
+Evaluar la confianza sobre la TOTALIDAD de la imagen, no solo sobre los campos que se lograron extraer.
+
+### Alto — datos usables sin revisión
+Todos estos criterios deben cumplirse:
+- El documento es un formato conocido (tirilla, app bancaria, comprobante digital)
+- Monto, voucher, fecha y medio de pago son legibles sin ambigüedad
+- No hay indicios de información faltante (documentos parcialmente visibles, bordes cortados)
+- Los datos son internamente consistentes (fecha coherente, monto en rango razonable)
+- El pago es claramente a favor de Nexo/Nutresa
+
+### Medio — datos probablemente correctos, requieren revisión
+Usar si se cumple AL MENOS UNO de estos:
+- Algún campo requirió interpretación (imagen borrosa, parcialmente cortada, baja resolución)
+- Formato de documento no estándar o desconocido
+- Hay múltiples documentos y solo se pudo extraer parcialmente alguno
+- Texto manuscrito presente sobre el soporte impreso
+- Monto con formato ambiguo (decimales no claros, separadores inconsistentes)
+- La fecha extraída es futura
+- La imagen es un screenshot de conversación con comprobante dentro (mayor riesgo de edición digital)
+
+### Bajo — datos posiblemente incorrectos, requieren verificación manual
+Usar si se cumple AL MENOS UNO de estos:
+- Imagen ilegible, muy borrosa o con resolución insuficiente
+- Campos clave faltantes (monto o voucher no se pudieron leer)
+- Contradicción entre datos visibles (ej: fecha del voucher vs fecha del encabezado)
+- Documento cortado o tapado significativamente
+- No se pudo identificar ni el tipo de documento ni el banco emisor
+- Monto sospechoso (0, negativo, o extremadamente alto)
+- El destinatario del pago NO es Nexo ni Nutresa
+
+Siempre explicar en confianza.notas el motivo cuando el nivel NO es alto.
+
+## Fallback para documentos financieros desconocidos
+
+Si la imagen contiene un documento financiero o transaccional pero no coincide con ningún banco o formato conocido, NO devolver extraccion_exitosa: false. Intentar extraer los datos con conocimiento general: buscar fecha, monto, y un identificador de transacción. Usar las reglas del Paso 1 para clasificar medio_de_pago si es posible. Establecer confianza nivel "medio" o "bajo" y explicar en observaciones qué tipo de documento parece ser.`;
 
 /**
  * Extrae datos estructurados de una imagen de soporte de pago.
@@ -191,7 +240,7 @@ export async function extraerDatosSoporte(
           },
           {
             type: "text",
-            text: "Extraer los datos de este comprobante de pago.",
+            text: `Fecha actual: ${new Date().toISOString().split("T")[0]}. Analizar esta imagen. Si contiene un comprobante de pago, extraer los datos. Si NO es un comprobante de pago, indicarlo con extraccion_exitosa: false.`,
           },
         ],
       },
