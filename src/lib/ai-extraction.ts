@@ -51,6 +51,23 @@ export const soporteSchema = z.object({
         "Medio de pago segun destino: Tarjeta de recaudo (convenio Nutresa), Bancolombia Nexo (cuenta directa), Davivienda Nexo (canal Davivienda)"
       ),
   }),
+  documentos_adicionales: z
+    .array(
+      z.object({
+        valor_pagado: z
+          .number()
+          .nullable()
+          .describe("Monto del documento adicional como entero sin decimales"),
+        numero_voucher: z
+          .string()
+          .nullable()
+          .describe("Voucher del documento adicional"),
+      })
+    )
+    .nullable()
+    .describe(
+      "Otros comprobantes de pago encontrados en la MISMA imagen. Solo incluir si hay mas de un soporte visible."
+    ),
   datos_adicionales: z
     .record(z.string(), z.string())
     .nullable()
@@ -77,6 +94,23 @@ export const soporteSchema = z.object({
 });
 
 export type DatosSoporte = z.infer<typeof soporteSchema>;
+
+/**
+ * Suma valor_pagado del documento principal + documentos_adicionales.
+ * Retorna null si el principal no tiene monto (no hay datos de IA).
+ */
+export function calcularMontoExtraido(extraction: {
+  datos?: { valor_pagado?: number | null } | null;
+  documentos_adicionales?: { valor_pagado?: number | null }[] | null;
+}): number | null {
+  const principal = extraction.datos?.valor_pagado;
+  if (principal == null) return null;
+  const adicionales = (extraction.documentos_adicionales ?? []).reduce(
+    (sum, d) => sum + (d.valor_pagado != null ? Number(d.valor_pagado) : 0),
+    0
+  );
+  return Number(principal) + adicionales;
+}
 
 const SYSTEM_PROMPT = `Eres un sistema especializado en extraer datos estructurados de imágenes de soportes de pago colombianos. Estos soportes son comprobantes de consignaciones, transferencias o recaudos realizados por clientes a favor de **Nexo Distribuciones SAS** o al convenio de **Servicios Nutresa**.
 
@@ -123,7 +157,7 @@ Si el banco no está en esta tabla, buscar el campo que funcione como identifica
 4. **Imágenes con ruido**: Sombras, reflejos, fondos de escritorio, texto manuscrito — extraer solo datos del soporte impreso.
 5. **Documentos rotados**: Leer en orientación correcta sin reportar error.
 6. **Texto manuscrito**: Reportar en observaciones, NO mezclar con datos extraídos del documento impreso.
-7. **Múltiples documentos**: Extraer SOLO el soporte principal (más completo/legible). Mencionar otros en observaciones.
+7. **Múltiples documentos**: Extraer el soporte principal (más completo/legible) en \`datos\`. Si hay otros comprobantes de pago visibles en la misma imagen, extraer su valor_pagado y numero_voucher en \`documentos_adicionales\`. El sistema sumará los montos automáticamente.
 8. **Soporte junto a factura**: Ignorar la factura, extraer solo el comprobante de pago.
 
 ## Fallback para documentos desconocidos

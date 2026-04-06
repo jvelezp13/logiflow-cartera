@@ -5,7 +5,7 @@ import { getUserProfile } from "@/lib/auth/get-tenant";
 import { ensureWriteAccess } from "@/lib/auth/types";
 import { revalidatePath } from "next/cache";
 import { generarUrlSubida, generarUrlLectura, eliminarObjeto } from "@/lib/r2";
-import { extraerDatosSoporte, type DatosSoporte } from "@/lib/ai-extraction";
+import { extraerDatosSoporte, calcularMontoExtraido, type DatosSoporte } from "@/lib/ai-extraction";
 import { logError } from "@/lib/logger";
 import { getHistorialPago } from "@/lib/queries/pagos-server";
 import { syncFetch } from "@/lib/sync-client";
@@ -338,10 +338,7 @@ export async function crearPago(
   // Enriquecer con datos de auditoría: qué sugirió la IA vs qué ingresó el usuario
   if (aiExtraction && typeof aiExtraction === "object") {
     const datos = aiExtraction.datos as Record<string, unknown> | undefined;
-    const aiMonto =
-      datos?.valor_pagado !== undefined && datos.valor_pagado !== null
-        ? Number(datos.valor_pagado)
-        : null;
+    const aiMonto = calcularMontoExtraido(aiExtraction as Record<string, unknown>);
 
     const aiVoucher =
       datos?.numero_voucher !== undefined && datos.numero_voucher !== null
@@ -401,14 +398,9 @@ export async function crearPago(
         const totalYaAplicado = (duplicados as { monto_total: number }[]).reduce(
           (sum, d) => sum + Number(d.monto_total), 0
         );
-        // Monto del soporte según IA (del pago actual)
-        const datos = (aiExtraction as Record<string, unknown> | null)?.datos as
-          | Record<string, unknown>
-          | undefined;
-        const montoSoporte =
-          datos?.valor_pagado !== undefined && datos.valor_pagado !== null
-            ? Number(datos.valor_pagado)
-            : null;
+        const montoSoporte = calcularMontoExtraido(
+          (aiExtraction as Record<string, unknown>) ?? {}
+        );
 
         return {
           voucher_duplicado: {

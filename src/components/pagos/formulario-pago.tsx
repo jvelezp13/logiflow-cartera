@@ -33,7 +33,7 @@ import { formatCurrencyFull, formatFechaCorta } from "@/lib/format";
 import { SelectorFacturas } from "@/components/pagos/selector-facturas";
 import type { FacturaAbierta } from "@/lib/queries/pagos-server";
 import type { RetroactivoData } from "@/lib/pagos-action";
-import { type DatosSoporte, MEDIOS_DE_PAGO } from "@/lib/ai-extraction";
+import { type DatosSoporte, MEDIOS_DE_PAGO, calcularMontoExtraido } from "@/lib/ai-extraction";
 
 function AIExtractionBadge({ aiData }: { aiData: DatosSoporte }) {
   const nivel = aiData.confianza.nivel;
@@ -157,7 +157,12 @@ function reducer(state: FormState, action: FormAction): FormState {
         objectKey: action.objectKey,
         soporteNombre: action.soporteNombre,
       };
-    case "EXTRACTION_DONE":
+    case "EXTRACTION_DONE": {
+      const montoSumado = calcularMontoExtraido(action.data) ?? 0;
+      const vouchersExtraidos = [
+        action.data.datos.numero_voucher,
+        ...(action.data.documentos_adicionales ?? []).map((d) => d.numero_voucher),
+      ].filter(Boolean) as string[];
       return {
         ...state,
         step: "reviewing",
@@ -166,13 +171,13 @@ function reducer(state: FormState, action: FormAction): FormState {
         fechaConsignacion:
           action.data.datos.fecha_consignacion || state.fechaConsignacion,
         montoTotal:
-          action.data.datos.valor_pagado?.toString() || state.montoTotal,
-        vouchers: action.data.datos.numero_voucher
-          ? [action.data.datos.numero_voucher]
-          : state.vouchers,
+          montoSumado > 0 ? montoSumado.toString() : state.montoTotal,
+        vouchers:
+          vouchersExtraidos.length > 0 ? vouchersExtraidos : state.vouchers,
         medioPago:
           action.data.datos.medio_de_pago || state.medioPago,
       };
+    }
     case "EXTRACTION_FAILED":
       return { ...state, step: "reviewing", error: action.error };
     case "SKIP_TO_REVIEW":
