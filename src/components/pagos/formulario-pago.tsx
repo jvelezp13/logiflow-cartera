@@ -235,9 +235,10 @@ export function FormularioPago({
 
   useEffect(() => {
     if (actionState?.success) {
-      savedRef.current = true;
       dispatch({ type: "SET_STEP", step: "done" });
       onSuccess?.();
+    } else if (actionState && !actionState.success) {
+      savedRef.current = false;
     }
     if (actionState?.voucher_duplicado) {
       setVoucherWarning(actionState.voucher_duplicado);
@@ -402,7 +403,7 @@ export function FormularioPago({
 
   // step === "reviewing"
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} action={formAction} onSubmit={() => { savedRef.current = true; }} className="space-y-4">
       {/* Hidden fields */}
       <input type="hidden" name="codigo_cliente" value={codigoCliente} />
       <input
