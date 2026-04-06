@@ -18,6 +18,8 @@ import Link from "next/link";
 
 import type { AuditoriaPendiente } from "@/lib/queries/auditoria-server";
 import { AUDITORIA_TIPO, type AuditoriaTipo } from "@/lib/pagos-constants";
+import { SoportePreview } from "@/components/pagos/soporte-preview";
+import { AiMetadataPopover } from "@/components/pagos/ai-metadata-popover";
 
 const TIPO_BADGE: Record<AuditoriaTipo, { label: string; classes: string }> = {
   [AUDITORIA_TIPO.VOUCHER_COMPARTIDO]: {
@@ -66,6 +68,9 @@ function AuditoriaRow({ a, userId, userRole }: AuditoriaRowProps) {
 
   const tieneAprobacion1 = a.aprobacion_1 !== null;
 
+  const montoIa = a.datos?.monto_ia != null ? Number(a.datos.monto_ia) : null;
+  const montoUsuario = a.datos?.monto_usuario != null ? Number(a.datos.monto_usuario) : null;
+
   function handleAprobar() {
     setError(null);
     startTransition(async () => {
@@ -87,28 +92,55 @@ function AuditoriaRow({ a, userId, userRole }: AuditoriaRowProps) {
             {badge.label}
           </Badge>
         </TableCell>
-        <TableCell className="text-sm py-1.5">
-          <div>{a.descripcion}</div>
-          <div className="flex items-center gap-3 mt-0.5">
-            {a.codigo_cliente && (
-              <Link
-                href={`/clientes/${a.codigo_cliente}`}
-                className="text-xs text-blue-600 hover:underline"
-              >
-                {a.codigo_cliente}
-                {a.nombre_negocio && (
-                  <span className="text-slate-400 ml-1">
-                    — {a.nombre_negocio}
-                  </span>
-                )}
-              </Link>
+        <TableCell className="text-sm py-1.5 max-w-xs">
+          <div className="space-y-0.5">
+
+            {montoIa != null && montoIa !== 0 && montoUsuario != null && (
+              <div className="text-xs tabular-nums">
+                <span className="text-slate-400">IA</span> {formatCurrencyFull(montoIa)}
+                <span className="text-slate-300 mx-1">→</span>
+                <span className="font-medium">{formatCurrencyFull(montoUsuario)}</span>
+                <span className="text-amber-600 font-medium ml-1">
+                  ({montoUsuario > montoIa ? "+" : ""}{((montoUsuario - montoIa) / montoIa * 100).toFixed(0)}%)
+                </span>
+              </div>
             )}
-            {a.datos?.monto_pago != null && (
-              <span className="text-xs text-slate-500">
-                {formatCurrencyFull(Number(a.datos.monto_pago))}
-              </span>
+
+
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              {a.codigo_cliente && (
+                <Link
+                  href={`/clientes/${a.codigo_cliente}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  {a.nombre_negocio || a.codigo_cliente}
+                </Link>
+              )}
+              {a.facturas.length > 0 && (
+                <span className="text-slate-400 truncate max-w-48">
+                  {a.facturas.join(", ")}
+                </span>
+              )}
+            </div>
+
+
+            {a.ai_metadata?.observaciones && (
+              <p className="text-xs text-amber-600 truncate max-w-xs" title={a.ai_metadata.observaciones}>
+                {a.ai_metadata.observaciones}
+              </p>
             )}
           </div>
+        </TableCell>
+        <TableCell className="py-1.5">
+          <div className="flex items-center justify-center gap-2">
+            {a.soporte_key && <SoportePreview soporteKey={a.soporte_key} />}
+            {a.ai_metadata && <AiMetadataPopover data={a.ai_metadata} />}
+          </div>
+          {a.created_by_nombre && (
+            <p className="text-xs text-slate-400 text-center mt-0.5 truncate">
+              {a.created_by_nombre}
+            </p>
+          )}
         </TableCell>
         <TableCell className="text-center py-1.5">
           {!tieneAprobacion1 ? (
@@ -141,7 +173,7 @@ function AuditoriaRow({ a, userId, userRole }: AuditoriaRowProps) {
       </TableRow>
       {error && (
         <TableRow>
-          <TableCell colSpan={5} className="py-1 px-2">
+          <TableCell colSpan={6} className="py-1 px-2">
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
               {error}
             </p>
@@ -167,17 +199,18 @@ export function TablaAuditorias({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="text-xs py-2 w-28">Fecha</TableHead>
-          <TableHead className="text-xs py-2 w-28">Tipo</TableHead>
-          <TableHead className="text-xs py-2">Descripcion</TableHead>
-          <TableHead className="text-xs py-2 w-36 text-center">Estado</TableHead>
-          <TableHead className="text-xs py-2 w-24" />
+          <TableHead className="text-xs py-2 w-24">Fecha</TableHead>
+          <TableHead className="text-xs py-2 w-24">Tipo</TableHead>
+          <TableHead className="text-xs py-2">Detalle</TableHead>
+          <TableHead className="text-xs py-2 w-20 text-center">Soporte</TableHead>
+          <TableHead className="text-xs py-2 w-20 text-center">Estado</TableHead>
+          <TableHead className="text-xs py-2 w-20" />
         </TableRow>
       </TableHeader>
       <TableBody>
         {auditorias.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+            <TableCell colSpan={6} className="text-center py-8 text-slate-500">
               No hay auditorias pendientes
             </TableCell>
           </TableRow>

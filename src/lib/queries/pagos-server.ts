@@ -122,7 +122,7 @@ function extractAiMeta(aiExtraction: unknown): {
   };
 }
 
-function extractAiMetadata(aiExtraction: unknown): AiMetadata | null {
+export function extractAiMetadata(aiExtraction: unknown): AiMetadata | null {
   if (!aiExtraction || typeof aiExtraction !== "object") return null;
   const ai = aiExtraction as Record<string, unknown>;
   const confianza = ai.confianza as Record<string, unknown> | undefined;

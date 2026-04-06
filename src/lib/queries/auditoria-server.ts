@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
 import { logError } from "@/lib/logger";
 import type { AuditoriaTipo } from "@/lib/pagos-constants";
+import { extractAiMetadata, type AiMetadata } from "@/lib/queries/pagos-server";
 
 const AUDITORIA_VENTANA_DIAS = 90;
 
@@ -22,6 +23,10 @@ export interface AuditoriaPendiente {
   aprobacion_2: string | null;
   aprobacion_2_nombre: string | null;
   aprobacion_2_at: string | null;
+  soporte_key: string | null;
+  monto_total: number;
+  ai_metadata: AiMetadata | null;
+  facturas: string[];
 }
 
 export interface PagoAuditoriaStatus {
@@ -44,7 +49,7 @@ export async function getAuditoriasPendientes(): Promise<AuditoriaPendiente[]> {
   const { data, error } = await supabase
     .from("auditoria_pagos")
     .select(
-      "id, pago_id, tipo, descripcion, datos, created_at, created_by, aprobacion_1, aprobacion_1_at, aprobacion_2, aprobacion_2_at, pagos!inner(codigo_cliente)"
+      "id, pago_id, tipo, descripcion, datos, created_at, created_by, aprobacion_1, aprobacion_1_at, aprobacion_2, aprobacion_2_at, pagos!inner(codigo_cliente, soporte_key, monto_total, ai_extraction, pago_facturas(no_factura))"
     )
     .eq("tenant_id", tenantId)
     .is("aprobacion_2", null)
@@ -84,7 +89,13 @@ export async function getAuditoriasPendientes(): Promise<AuditoriaPendiente[]> {
 
   // Recolectar codigos de cliente unicos para resolver nombres de negocio
   // pagos!inner devuelve un objeto (relacion FK to-one), no un array
-  type PagosJoin = { codigo_cliente: string };
+  type PagosJoin = {
+    codigo_cliente: string;
+    soporte_key: string | null;
+    monto_total: number;
+    ai_extraction: unknown;
+    pago_facturas: { no_factura: string }[] | null;
+  };
   const codigos = [
     ...new Set(
       rows
@@ -120,8 +131,8 @@ export async function getAuditoriasPendientes(): Promise<AuditoriaPendiente[]> {
   );
 
   return rows.map((row) => {
-    const codigoCliente =
-      (row.pagos as unknown as PagosJoin | null)?.codigo_cliente ?? "";
+    const pago = row.pagos as unknown as PagosJoin | null;
+    const codigoCliente = pago?.codigo_cliente ?? "";
     return {
       id: row.id,
       pago_id: row.pago_id,
@@ -145,6 +156,10 @@ export async function getAuditoriasPendientes(): Promise<AuditoriaPendiente[]> {
         ? (nombresProfile.get(row.aprobacion_2) ?? null)
         : null,
       aprobacion_2_at: row.aprobacion_2_at,
+      soporte_key: pago?.soporte_key ?? null,
+      monto_total: Number(pago?.monto_total ?? 0),
+      ai_metadata: extractAiMetadata(pago?.ai_extraction),
+      facturas: (pago?.pago_facturas || []).map((f) => f.no_factura),
     };
   });
 }
