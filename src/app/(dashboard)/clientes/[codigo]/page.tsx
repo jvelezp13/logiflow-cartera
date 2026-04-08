@@ -50,9 +50,16 @@ export default async function DetalleClientePage({
     notFound();
   }
 
-  const facturas = incluirCastigada
+  const facturas = (incluirCastigada
     ? todasFacturas
-    : todasFacturas.filter((f) => (f.mora || 0) <= 90);
+    : todasFacturas.filter((f) => (f.mora || 0) <= 90)
+  )
+    .slice()
+    .sort((a, b) => {
+      const fa = a.fecha_vencimiento ? new Date(a.fecha_vencimiento).getTime() : Infinity;
+      const fb = b.fecha_vencimiento ? new Date(b.fecha_vencimiento).getTime() : Infinity;
+      return fa - fb;
+    });
 
   const nombreDisplay = info.nombre_negocio || info.razon_social || codigo;
   const severidad = SEVERIDAD_CONFIG[getSeveridad(info.maxima_mora)];
