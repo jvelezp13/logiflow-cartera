@@ -210,15 +210,15 @@ export function FormularioPago({
   onSuccess,
   retroactivo,
 }: FormularioPagoProps) {
+  const retroMontoNum = retroactivo ? parseInt(retroactivo.monto, 10) || 0 : 0;
   const [state, dispatch] = useReducer(reducer, retroactivo, (retro) => ({
     ...initialState,
     ...(retro?.monto ? { montoTotal: retro.monto } : {}),
     ...(retro ? {
-      step: "reviewing" as Step,
       facturasSeleccionadas: [{
         no_factura: retro.factura,
-        valor_factura: parseInt(retro.monto, 10) || 0,
-        valor_aplicado: parseInt(retro.monto, 10) || 0,
+        valor_factura: retroMontoNum,
+        valor_aplicado: retroMontoNum,
       }],
     } : {}),
   }));
@@ -379,6 +379,20 @@ export function FormularioPago({
   if (state.step === "idle") {
     return (
       <div className="space-y-4">
+        {retroactivo && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800 space-y-0.5">
+            <div className="font-medium">Pago retroactivo</div>
+            <div className="text-amber-700">
+              Factura <span className="font-medium">{retroactivo.factura}</span>
+              {" — "}
+              {formatCurrencyFull(retroMontoNum)}
+              {" segun ERP"}
+            </div>
+            <div className="text-[10px] text-amber-600">
+              Subi el soporte y la IA va a extraer medio de pago, voucher y fecha automaticamente.
+            </div>
+          </div>
+        )}
         <DropZone onFileSelect={handleFileSelect} />
         <div className="text-center">
           <button
