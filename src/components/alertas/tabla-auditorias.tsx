@@ -42,6 +42,14 @@ const TIPO_BADGE: Record<AuditoriaTipo, { label: string; classes: string }> = {
     label: "Sin soporte",
     classes: "bg-amber-100 text-amber-700 border-amber-200",
   },
+  [AUDITORIA_TIPO.CONFIANZA_BAJA]: {
+    label: "Confianza baja",
+    classes: "bg-rose-100 text-rose-700 border-rose-200",
+  },
+  [AUDITORIA_TIPO.VOUCHER_MODIFICADO]: {
+    label: "Voucher mod",
+    classes: "bg-teal-100 text-teal-700 border-teal-200",
+  },
 };
 
 function getTipoBadge(tipo: AuditoriaTipo) {

@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { generarUrlSubida, generarUrlLectura, eliminarObjeto } from "@/lib/r2";
 import { extraerDatosSoporte, calcularMontoExtraido, type DatosSoporte } from "@/lib/ai-extraction";
 import { logError } from "@/lib/logger";
-import { getHistorialPago } from "@/lib/queries/pagos-server";
+import { getHistorialPago, extractAiMetadata } from "@/lib/queries/pagos-server";
 import { syncFetch } from "@/lib/sync-client";
 import { formatCurrencyFull } from "@/lib/format";
 import { UMBRAL_REDONDEO_PAGO } from "@/lib/constants";
@@ -501,20 +501,29 @@ export async function crearPago(
   }
 
   // Fire-and-forget: detectar eventos de auditoria (batch single INSERT)
-  const auditData = (aiExtraction as Record<string, unknown>)?._audit as Record<string, unknown> | undefined;
+  const aiMeta = extractAiMetadata(aiExtraction);
+  const auditData = aiMeta?.audit;
   const eventosInsert: { tenant_id: string; pago_id: string; tipo: AuditoriaTipo; descripcion: string; datos: Record<string, unknown> | null; created_by: string }[] = [];
+  const crearEvento = (tipo: AuditoriaTipo, descripcion: string, datos: Record<string, unknown> | null) =>
+    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo, descripcion, datos, created_by: profile.id });
 
   if (auditData?.voucher_compartido) {
-    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.VOUCHER_COMPARTIDO, descripcion: `Pago con voucher compartido — cliente ${codigoCliente}`, datos: { vouchers, pagos_relacionados: auditData.pagos_relacionados }, created_by: profile.id });
+    crearEvento(AUDITORIA_TIPO.VOUCHER_COMPARTIDO, `Pago con voucher compartido — cliente ${codigoCliente}`, { vouchers, pagos_relacionados: auditData.pagos_relacionados });
   }
   if (esRetroactivo && auditData?.monto_modificado_vs_sync) {
-    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.MONTO_DIFF_SYNC, descripcion: `Monto retroactivo difiere del ERP — cliente ${codigoCliente}`, datos: { sync_monto: auditData.sync_monto, monto_usuario: montoTotal }, created_by: profile.id });
+    crearEvento(AUDITORIA_TIPO.MONTO_DIFF_SYNC, `Monto retroactivo difiere del ERP — cliente ${codigoCliente}`, { sync_monto: auditData.sync_monto, monto_usuario: montoTotal });
   }
   if (auditData?.monto_modificado && auditData?.monto_ia) {
-    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.MONTO_DIFF_IA, descripcion: `Monto difiere de extraccion IA — cliente ${codigoCliente}`, datos: { monto_ia: auditData.monto_ia, monto_usuario: montoTotal }, created_by: profile.id });
+    crearEvento(AUDITORIA_TIPO.MONTO_DIFF_IA, `Monto difiere de extraccion IA — cliente ${codigoCliente}`, { monto_ia: auditData.monto_ia, monto_usuario: montoTotal });
   }
   if (!soporteKey) {
-    eventosInsert.push({ tenant_id: profile.tenant_id, pago_id: pago.id, tipo: AUDITORIA_TIPO.PAGO_SIN_SOPORTE, descripcion: `Pago registrado sin soporte — cliente ${codigoCliente}`, datos: { monto: montoTotal }, created_by: profile.id });
+    crearEvento(AUDITORIA_TIPO.PAGO_SIN_SOPORTE, `Pago registrado sin soporte — cliente ${codigoCliente}`, { monto: montoTotal });
+  }
+  if (auditData?.voucher_modificado) {
+    crearEvento(AUDITORIA_TIPO.VOUCHER_MODIFICADO, `Voucher modificado vs extraccion IA — cliente ${codigoCliente}`, { voucher_ia: auditData.voucher_ia, voucher_usuario: auditData.voucher_usuario });
+  }
+  if (aiMeta?.confianza_nivel === "bajo") {
+    crearEvento(AUDITORIA_TIPO.CONFIANZA_BAJA, `IA extrajo el pago con confianza baja — cliente ${codigoCliente}`, { confianza_nivel: aiMeta.confianza_nivel, confianza_notas: aiMeta.confianza_notas });
   }
 
   if (eventosInsert.length > 0) {

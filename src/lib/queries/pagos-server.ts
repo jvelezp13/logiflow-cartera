@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenantId } from "@/lib/auth/get-tenant";
 import { generarUrlLectura } from "@/lib/r2";
 import { logError } from "@/lib/logger";
+import { AUDITORIA_TIPO } from "@/lib/pagos-constants";
 
 // --- Tipos ---
 
@@ -230,20 +231,42 @@ export async function getPagosPaginados(
   const needsConciliacion =
     filters.filtro === "sin_conciliar" || filters.filtro === "discrepancia";
 
-  const [searchResult, conciliacionResult] = await Promise.all([
+  // Filtros que cuentan auditoria_pagos pendientes deben filtrar por los mismos
+  // pago_ids — sino el chip count y el resultado del filtro divergen.
+  const FILTRO_TO_AUDITORIA_TIPO: Record<string, string> = {
+    monto_modificado: AUDITORIA_TIPO.MONTO_DIFF_IA,
+    voucher_compartido: AUDITORIA_TIPO.VOUCHER_COMPARTIDO,
+    voucher_modificado: AUDITORIA_TIPO.VOUCHER_MODIFICADO,
+    confianza_baja: AUDITORIA_TIPO.CONFIANZA_BAJA,
+  };
+  const auditoriaTipo = filters.filtro ? FILTRO_TO_AUDITORIA_TIPO[filters.filtro] : undefined;
+
+  const [searchResult, conciliacionResult, auditoriaResult] = await Promise.all([
     hasSearch
       ? supabase.rpc("buscar_pago_ids", {
           p_tenant_id: tenantId,
           p_term: sanitized,
         })
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
     needsConciliacion
       ? supabase.rpc("get_pago_ids_conciliacion", {
           p_tenant_id: tenantId,
           p_estado: filters.filtro,
         })
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
+    auditoriaTipo
+      ? supabase
+          .from("auditoria_pagos")
+          .select("pago_id")
+          .eq("tenant_id", tenantId)
+          .eq("tipo", auditoriaTipo)
+          .is("aprobacion_2", null)
+      : Promise.resolve({ data: null, error: null }),
   ]);
+
+  if (searchResult.error) throw searchResult.error;
+  if (conciliacionResult.error) throw conciliacionResult.error;
+  if (auditoriaResult.error) throw auditoriaResult.error;
 
   const searchPagoIds = hasSearch
     ? (searchResult.data as { pago_id: string }[] | null)?.map((r) => r.pago_id) ?? []
@@ -251,6 +274,22 @@ export async function getPagosPaginados(
   const conciliacionIds = needsConciliacion
     ? (conciliacionResult.data as string[] | null) ?? []
     : null;
+  const auditoriaIds = auditoriaTipo
+    ? (auditoriaResult.data as { pago_id: string }[] | null)?.map((r) => r.pago_id) ?? []
+    : null;
+
+  // Interseccion explicita de todos los filtros que producen pago_ids — evita
+  // ambiguedad de aplicar dos .in("id", ...) sobre la misma columna.
+  const idSets = [searchPagoIds, auditoriaIds, conciliacionIds].filter(
+    (s): s is string[] => s !== null
+  );
+  let allowedIds: string[] | null = null;
+  if (idSets.length > 0) {
+    allowedIds = idSets.reduce((acc, ids) => acc.filter((id) => ids.includes(id)));
+    if (allowedIds.length === 0) {
+      return { pagos: [], total: 0 };
+    }
+  }
 
   let query = supabase
     .from("pagos")
@@ -260,34 +299,17 @@ export async function getPagosPaginados(
     )
     .eq("tenant_id", tenantId);
 
-  if (hasSearch) {
-    if (searchPagoIds && searchPagoIds.length > 0) {
-      query = query.in("id", searchPagoIds);
-    } else {
-      return { pagos: [], total: 0 };
-    }
+  if (allowedIds !== null) {
+    query = query.in("id", allowedIds);
   }
   if (filters.filtro === "sin_crm") {
     query = query.eq("estado", "registrado");
   } else if (filters.filtro === "verificado") {
     query = query.eq("estado", "verificado");
-  } else if (filters.filtro === "monto_modificado") {
-    query = query.filter("ai_extraction->_audit->>monto_modificado", "eq", "true");
   } else if (filters.filtro === "manual") {
     query = query.filter("ai_extraction->_audit->>data_origin", "eq", "manual");
-  } else if (filters.filtro === "voucher_compartido") {
-    query = query.filter("ai_extraction->_audit->>voucher_compartido", "eq", "true");
-  } else if (filters.filtro === "voucher_modificado") {
-    query = query.filter("ai_extraction->_audit->>voucher_modificado", "eq", "true");
   } else if (filters.filtro === "editado") {
     query = query.eq("editado", true);
-  } else if (filters.filtro === "confianza_baja") {
-    query = query.filter("ai_extraction->confianza->>nivel", "eq", "bajo");
-  } else if (needsConciliacion && conciliacionIds !== null) {
-    if (conciliacionIds.length === 0) {
-      return { pagos: [], total: 0 };
-    }
-    query = query.in("id", conciliacionIds);
   }
   if (filters.desde) query = query.gte("fecha_consignacion", filters.desde);
   if (filters.hasta) query = query.lte("fecha_consignacion", filters.hasta);
@@ -429,17 +451,26 @@ export async function getPagoDetalle(
 }
 
 /**
- * Counts de auditoria para las capsulas de filtro:
- * - sinCRM: pagos sin codigos CRM
- * - montoModificado: pagos donde IA detecto que el monto fue editado manualmente
- * - ingresoManual: pagos ingresados a mano (sin IA)
- * - sinConciliar: pagos verificados donde la factura aun no refleja el pago en cartera
+ * Counts para las capsulas de filtro en /pagos:
+ * - Auditables (cuentan auditoria_pagos PENDIENTES, bajan cuando se aprueban):
+ *   montoModificado, voucherCompartido, voucherModificado, confianzaBaja
+ * - Operativos (cuentan propiedades crudas del pago):
+ *   sinCRM, ingresoManual, sinConciliar, conDiscrepancia, editado
  */
 export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
   const tenantId = await getTenantId();
   const supabase = await createClient();
 
-  // get_pagos_conciliacion devuelve ambos conteos en UNA sola llamada
+  // Chips auditables (con flujo de cierre): cuentan auditoria_pagos pendientes por tipo.
+  // Chips operativos (sin_crm, manual, conciliacion, editado): cuentan propiedades del pago.
+  const auditCountByType = (tipo: string) =>
+    supabase
+      .from("auditoria_pagos")
+      .select("*", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("tipo", tipo)
+      .is("aprobacion_2", null);
+
   const [sinCRMResult, montoModResult, manualResult, conciliacionResult, voucherCompResult, voucherModResult, editadoResult, confianzaBajaResult] =
     await Promise.all([
       supabase
@@ -448,11 +479,7 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
         .eq("tenant_id", tenantId)
         .eq("estado", "registrado"),
 
-      supabase
-        .from("pagos")
-        .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .filter("ai_extraction->_audit->>monto_modificado", "eq", "true"),
+      auditCountByType(AUDITORIA_TIPO.MONTO_DIFF_IA),
 
       supabase
         .from("pagos")
@@ -462,17 +489,9 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
 
       supabase.rpc("get_pagos_conciliacion", { p_tenant_id: tenantId }),
 
-      supabase
-        .from("pagos")
-        .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .filter("ai_extraction->_audit->>voucher_compartido", "eq", "true"),
+      auditCountByType(AUDITORIA_TIPO.VOUCHER_COMPARTIDO),
 
-      supabase
-        .from("pagos")
-        .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .filter("ai_extraction->_audit->>voucher_modificado", "eq", "true"),
+      auditCountByType(AUDITORIA_TIPO.VOUCHER_MODIFICADO),
 
       supabase
         .from("pagos")
@@ -480,11 +499,7 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
         .eq("tenant_id", tenantId)
         .eq("editado", true),
 
-      supabase
-        .from("pagos")
-        .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .filter("ai_extraction->confianza->>nivel", "eq", "bajo"),
+      auditCountByType(AUDITORIA_TIPO.CONFIANZA_BAJA),
     ]);
 
   if (sinCRMResult.error) throw sinCRMResult.error;
@@ -492,6 +507,8 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
   if (manualResult.error) throw manualResult.error;
   if (voucherCompResult.error) throw voucherCompResult.error;
   if (voucherModResult.error) throw voucherModResult.error;
+  if (confianzaBajaResult.error) throw confianzaBajaResult.error;
+  if (editadoResult.error) throw editadoResult.error;
   // Fallback a 0 solo si la RPC no existe aún (PGRST202); otros errores deben propagarse
   if (conciliacionResult.error && conciliacionResult.error.code !== "PGRST202") {
     throw conciliacionResult.error;

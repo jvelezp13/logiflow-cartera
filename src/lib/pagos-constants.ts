@@ -19,6 +19,8 @@ export const AUDITORIA_TIPO = {
   MONTO_EDITADO: "monto_editado",
   MONTO_DIFF_IA: "monto_diff_ia",
   PAGO_SIN_SOPORTE: "pago_sin_soporte",
+  CONFIANZA_BAJA: "confianza_baja",
+  VOUCHER_MODIFICADO: "voucher_modificado",
 } as const;
 
 export type AuditoriaTipo = (typeof AUDITORIA_TIPO)[keyof typeof AUDITORIA_TIPO];
