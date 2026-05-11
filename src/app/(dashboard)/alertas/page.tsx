@@ -90,12 +90,20 @@ export default async function AlertasPage({
 
         {modo === "novedades" && (
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <Link
+                href="/alertas/historico"
+                className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
+              >
+                Ver histórico de auditorías cerradas →
+              </Link>
+            </div>
             {auditorias.length > 0 && (
               <Card>
                 <CardContent className="p-0">
                   <div className="px-4 py-2 border-b bg-amber-50/50">
                     <h3 className="text-sm font-medium text-amber-800">
-                      Auditorias pendientes ({auditorias.length})
+                      Auditorías pendientes ({auditorias.length})
                     </h3>
                   </div>
                   <TablaAuditorias

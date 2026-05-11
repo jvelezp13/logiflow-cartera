@@ -26,43 +26,12 @@ import { formatFechaRelativa, formatCurrencyFull } from "@/lib/format";
 import Link from "next/link";
 
 import type { AuditoriaPendiente } from "@/lib/queries/auditoria-server";
-import { AUDITORIA_TIPO, AUDITORIA_MOTIVO_MAX_LENGTH, type AuditoriaTipo } from "@/lib/pagos-constants";
+import { AUDITORIA_TIPO_BADGE, AUDITORIA_MOTIVO_MAX_LENGTH, type AuditoriaTipo } from "@/lib/pagos-constants";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { AiMetadataPopover } from "@/components/pagos/ai-metadata-popover";
 
-const TIPO_BADGE: Record<AuditoriaTipo, { label: string; classes: string }> = {
-  [AUDITORIA_TIPO.VOUCHER_COMPARTIDO]: {
-    label: "Voucher",
-    classes: "bg-red-100 text-red-700 border-red-200",
-  },
-  [AUDITORIA_TIPO.MONTO_DIFF_SYNC]: {
-    label: "Monto Sync",
-    classes: "bg-red-100 text-red-700 border-red-200",
-  },
-  [AUDITORIA_TIPO.MONTO_EDITADO]: {
-    label: "Monto Edit",
-    classes: "bg-red-100 text-red-700 border-red-200",
-  },
-  [AUDITORIA_TIPO.MONTO_DIFF_IA]: {
-    label: "Monto IA",
-    classes: "bg-amber-100 text-amber-700 border-amber-200",
-  },
-  [AUDITORIA_TIPO.PAGO_SIN_SOPORTE]: {
-    label: "Sin soporte",
-    classes: "bg-amber-100 text-amber-700 border-amber-200",
-  },
-  [AUDITORIA_TIPO.CONFIANZA_BAJA]: {
-    label: "Confianza baja",
-    classes: "bg-rose-100 text-rose-700 border-rose-200",
-  },
-  [AUDITORIA_TIPO.VOUCHER_MODIFICADO]: {
-    label: "Voucher mod",
-    classes: "bg-teal-100 text-teal-700 border-teal-200",
-  },
-};
-
 function getTipoBadge(tipo: AuditoriaTipo) {
-  return TIPO_BADGE[tipo] ?? { label: tipo, classes: "bg-slate-100 text-slate-600" };
+  return AUDITORIA_TIPO_BADGE[tipo] ?? { label: tipo, classes: "bg-slate-100 text-slate-600" };
 }
 
 interface AuditoriaRowProps {
@@ -311,7 +280,7 @@ export function TablaAuditorias({
         {auditorias.length === 0 ? (
           <TableRow>
             <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-              No hay auditorias pendientes
+              No hay auditorías pendientes
             </TableCell>
           </TableRow>
         ) : (

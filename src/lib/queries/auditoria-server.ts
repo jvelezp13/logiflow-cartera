@@ -34,6 +34,42 @@ export interface PagoAuditoriaStatus {
   aprobadas: number;
 }
 
+export type AuditoriaEstadoCierre = "aprobada" | "rechazada";
+
+export interface AuditoriaHistorica {
+  id: string;
+  pago_id: string;
+  tipo: AuditoriaTipo;
+  descripcion: string;
+  datos: Record<string, unknown> | null;
+  created_at: string;
+  created_by: string;
+  created_by_nombre: string | null;
+  codigo_cliente: string;
+  nombre_negocio: string | null;
+  estado_cierre: AuditoriaEstadoCierre;
+  // Cerrada por aprobacion
+  aprobacion_1_nombre: string | null;
+  aprobacion_1_at: string | null;
+  aprobacion_2_nombre: string | null;
+  aprobacion_2_at: string | null;
+  // Cerrada por rechazo
+  rechazada_por_nombre: string | null;
+  rechazada_at: string | null;
+  motivo_cierre: string | null;
+  // Pago
+  monto_total: number;
+}
+
+export interface HistoricoFilters {
+  desde?: string;
+  hasta?: string;
+  tipo?: AuditoriaTipo;
+  estado?: AuditoriaEstadoCierre;
+}
+
+export const HISTORICO_PAGE_SIZE = 30;
+
 /**
  * Auditorias pendientes de doble aprobacion (aprobacion_2 IS NULL),
  * ultimos 90 dias, ordenadas por created_at DESC.
@@ -224,4 +260,142 @@ export async function getAuditoriasPendientesCount(): Promise<number> {
   }
 
   return count ?? 0;
+}
+
+/**
+ * Auditorias cerradas (aprobadas o rechazadas) — histórico paginado con filtros
+ * opcionales: fecha desde/hasta, tipo de auditoría, estado de cierre.
+ */
+export async function getAuditoriasHistorico(
+  page: number,
+  filters: HistoricoFilters
+): Promise<{ auditorias: AuditoriaHistorica[]; total: number }> {
+  const tenantId = await getTenantId();
+  const supabase = await createClient();
+  const offset = (page - 1) * HISTORICO_PAGE_SIZE;
+
+  let query = supabase
+    .from("auditoria_pagos")
+    .select(
+      "id, pago_id, tipo, descripcion, datos, created_at, created_by, aprobacion_1, aprobacion_1_at, aprobacion_2, aprobacion_2_at, rechazada_por, rechazada_at, motivo_cierre, pagos!inner(codigo_cliente, monto_total)",
+      { count: "exact" }
+    )
+    .eq("tenant_id", tenantId);
+
+  // Filtro estado: aprobada (aprobacion_2 NOT NULL) o rechazada (rechazada_por NOT NULL).
+  // Si no se pasa, mostrar AMBAS — cualquier cierre.
+  if (filters.estado === "aprobada") {
+    query = query.not("aprobacion_2", "is", null);
+  } else if (filters.estado === "rechazada") {
+    query = query.not("rechazada_por", "is", null);
+  } else {
+    query = query.or("aprobacion_2.not.is.null,rechazada_por.not.is.null");
+  }
+
+  if (filters.tipo) query = query.eq("tipo", filters.tipo);
+  if (filters.desde) query = query.gte("created_at", filters.desde);
+  if (filters.hasta) query = query.lte("created_at", filters.hasta);
+
+  // Ordenar por fecha de cierre real (la mayor de aprobacion_2_at o rechazada_at).
+  // Como no se puede ordenar por expresion COALESCE via PostgREST, usamos created_at
+  // descendente como proxy razonable.
+  const { data, error, count } = await query
+    .order("created_at", { ascending: false })
+    .range(offset, offset + HISTORICO_PAGE_SIZE - 1);
+
+  if (error) {
+    logError("getAuditoriasHistorico", error);
+    return { auditorias: [], total: 0 };
+  }
+
+  type RawRow = {
+    id: string;
+    pago_id: string;
+    tipo: string;
+    descripcion: string;
+    datos: Record<string, unknown> | null;
+    created_at: string;
+    created_by: string;
+    aprobacion_1: string | null;
+    aprobacion_1_at: string | null;
+    aprobacion_2: string | null;
+    aprobacion_2_at: string | null;
+    rechazada_por: string | null;
+    rechazada_at: string | null;
+    motivo_cierre: string | null;
+    pagos: unknown;
+  };
+  const rows = (data as unknown as RawRow[]) || [];
+
+  // Resolver nombres de profiles y clientes en batch (mismo patron que getAuditoriasPendientes)
+  const profileIds = new Set<string>();
+  for (const row of rows) {
+    if (row.created_by) profileIds.add(row.created_by);
+    if (row.aprobacion_1) profileIds.add(row.aprobacion_1);
+    if (row.aprobacion_2) profileIds.add(row.aprobacion_2);
+    if (row.rechazada_por) profileIds.add(row.rechazada_por);
+  }
+
+  type PagosJoin = { codigo_cliente: string; monto_total: number };
+  const codigos = [
+    ...new Set(
+      rows
+        .map((r) => (r.pagos as unknown as PagosJoin | null)?.codigo_cliente)
+        .filter(Boolean) as string[]
+    ),
+  ];
+
+  const [profilesRes, clientesRes] = await Promise.all([
+    profileIds.size > 0
+      ? supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", [...profileIds])
+      : Promise.resolve({ data: [] as { id: string; full_name: string | null }[] }),
+    codigos.length > 0
+      ? supabase
+          .from("vista_cliente_resumen")
+          .select("codigo_cliente, nombre_negocio")
+          .eq("tenant_id", tenantId)
+          .in("codigo_cliente", codigos)
+      : Promise.resolve({
+          data: [] as { codigo_cliente: string; nombre_negocio: string | null }[],
+        }),
+  ]);
+
+  const nombresProfile = new Map(
+    (profilesRes.data || []).map((p) => [p.id, p.full_name])
+  );
+  const nombresCliente = new Map(
+    (clientesRes.data || []).map((c) => [c.codigo_cliente, c.nombre_negocio])
+  );
+
+  const auditorias: AuditoriaHistorica[] = rows.map((row) => {
+    const pago = row.pagos as unknown as PagosJoin | null;
+    const codigoCliente = pago?.codigo_cliente ?? "";
+    const estado: AuditoriaEstadoCierre = row.rechazada_por ? "rechazada" : "aprobada";
+    return {
+      id: row.id,
+      pago_id: row.pago_id,
+      tipo: row.tipo as AuditoriaTipo,
+      descripcion: row.descripcion,
+      datos: row.datos,
+      created_at: row.created_at,
+      created_by: row.created_by,
+      created_by_nombre: nombresProfile.get(row.created_by) ?? null,
+      codigo_cliente: codigoCliente,
+      nombre_negocio: nombresCliente.get(codigoCliente) ?? null,
+      estado_cierre: estado,
+      aprobacion_1_nombre: row.aprobacion_1 ? (nombresProfile.get(row.aprobacion_1) ?? null) : null,
+      aprobacion_1_at: row.aprobacion_1_at,
+      aprobacion_2_nombre: row.aprobacion_2 ? (nombresProfile.get(row.aprobacion_2) ?? null) : null,
+      aprobacion_2_at: row.aprobacion_2_at,
+      rechazada_por_nombre: row.rechazada_por ? (nombresProfile.get(row.rechazada_por) ?? null) : null,
+      rechazada_at: row.rechazada_at,
+      motivo_cierre: row.motivo_cierre,
+      monto_total: Number(pago?.monto_total ?? 0),
+    };
+  });
+
+  return { auditorias, total: count ?? 0 };
 }
