@@ -24,3 +24,5 @@ export const AUDITORIA_TIPO = {
 } as const;
 
 export type AuditoriaTipo = (typeof AUDITORIA_TIPO)[keyof typeof AUDITORIA_TIPO];
+
+export const AUDITORIA_MOTIVO_MAX_LENGTH = 200;

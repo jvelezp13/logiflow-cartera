@@ -53,6 +53,7 @@ export async function getAuditoriasPendientes(): Promise<AuditoriaPendiente[]> {
     )
     .eq("tenant_id", tenantId)
     .is("aprobacion_2", null)
+    .is("rechazada_por", null)
     .gte("created_at", fechaLimite.toISOString())
     .order("created_at", { ascending: false })
     .limit(100);
@@ -178,7 +179,7 @@ export async function getPagosAuditados(
 
   const { data, error } = await supabase
     .from("auditoria_pagos")
-    .select("pago_id, aprobacion_2")
+    .select("pago_id, aprobacion_2, rechazada_por")
     .eq("tenant_id", tenantId)
     .in("pago_id", pagoIds);
 
@@ -191,7 +192,8 @@ export async function getPagosAuditados(
   for (const row of data || []) {
     const current = map.get(row.pago_id) || { total: 0, aprobadas: 0 };
     current.total++;
-    if (row.aprobacion_2 !== null) current.aprobadas++;
+    // Aprobada o rechazada cuentan ambas como "cerrada" para el contador
+    if (row.aprobacion_2 !== null || row.rechazada_por !== null) current.aprobadas++;
     map.set(row.pago_id, current);
   }
 
@@ -213,6 +215,7 @@ export async function getAuditoriasPendientesCount(): Promise<number> {
     .select("*", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
     .is("aprobacion_2", null)
+    .is("rechazada_por", null)
     .gte("created_at", fechaLimite.toISOString());
 
   if (error) {

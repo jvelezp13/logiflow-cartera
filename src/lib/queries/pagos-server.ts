@@ -261,6 +261,7 @@ export async function getPagosPaginados(
           .eq("tenant_id", tenantId)
           .eq("tipo", auditoriaTipo)
           .is("aprobacion_2", null)
+          .is("rechazada_por", null)
       : Promise.resolve({ data: null, error: null }),
   ]);
 
@@ -469,7 +470,8 @@ export async function getPagosAuditCounts(): Promise<PagosAuditCounts> {
       .select("*", { count: "exact", head: true })
       .eq("tenant_id", tenantId)
       .eq("tipo", tipo)
-      .is("aprobacion_2", null);
+      .is("aprobacion_2", null)
+      .is("rechazada_por", null);
 
   const [sinCRMResult, montoModResult, manualResult, conciliacionResult, voucherCompResult, voucherModResult, editadoResult, confianzaBajaResult] =
     await Promise.all([

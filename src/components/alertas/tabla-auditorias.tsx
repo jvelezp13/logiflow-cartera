@@ -11,13 +11,22 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShieldCheck } from "lucide-react";
-import { aprobarAuditoria } from "@/lib/auditoria-action";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ShieldCheck, XCircle } from "lucide-react";
+import { aprobarAuditoria, rechazarAuditoria } from "@/lib/auditoria-action";
 import { formatFechaRelativa, formatCurrencyFull } from "@/lib/format";
 import Link from "next/link";
 
 import type { AuditoriaPendiente } from "@/lib/queries/auditoria-server";
-import { AUDITORIA_TIPO, type AuditoriaTipo } from "@/lib/pagos-constants";
+import { AUDITORIA_TIPO, AUDITORIA_MOTIVO_MAX_LENGTH, type AuditoriaTipo } from "@/lib/pagos-constants";
 import { SoportePreview } from "@/components/pagos/soporte-preview";
 import { AiMetadataPopover } from "@/components/pagos/ai-metadata-popover";
 
@@ -65,14 +74,18 @@ interface AuditoriaRowProps {
 function AuditoriaRow({ a, userId, userRole }: AuditoriaRowProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [rechazoOpen, setRechazoOpen] = useState(false);
+  const [motivo, setMotivo] = useState("");
 
   const badge = getTipoBadge(a.tipo);
 
+  const esAdmin = userRole === "admin" || userRole === "super_admin";
   const canApprove =
-    (userRole === "admin" || userRole === "super_admin") &&
+    esAdmin &&
     a.created_by !== userId &&
     a.aprobacion_1 !== userId &&
     a.aprobacion_2 === null;
+  const canReject = esAdmin && a.created_by !== userId && a.aprobacion_2 === null;
 
   const tieneAprobacion1 = a.aprobacion_1 !== null;
 
@@ -88,6 +101,21 @@ function AuditoriaRow({ a, userId, userRole }: AuditoriaRowProps) {
       }
     });
   }
+
+  function handleRechazar() {
+    setError(null);
+    startTransition(async () => {
+      const result = await rechazarAuditoria(a.id, motivo);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setRechazoOpen(false);
+        setMotivo("");
+      }
+    });
+  }
+
+  const motivoValido = motivo.trim().length > 0 && motivo.length <= AUDITORIA_MOTIVO_MAX_LENGTH;
 
   return (
     <>
@@ -165,21 +193,85 @@ function AuditoriaRow({ a, userId, userRole }: AuditoriaRowProps) {
           )}
         </TableCell>
         <TableCell className="py-1.5 text-right">
-          {canApprove && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-              onClick={handleAprobar}
-              disabled={isPending}
-            >
-              <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-              Aprobar
-            </Button>
-          )}
+          <div className="flex items-center justify-end gap-2">
+            {canApprove && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                onClick={handleAprobar}
+                disabled={isPending}
+              >
+                <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                Aprobar
+              </Button>
+            )}
+            {canReject && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                onClick={() => setRechazoOpen(true)}
+                disabled={isPending}
+              >
+                <XCircle className="h-3.5 w-3.5 mr-1" />
+                Rechazar
+              </Button>
+            )}
+          </div>
+          <Dialog
+            open={rechazoOpen}
+            onOpenChange={(open) => {
+              setRechazoOpen(open);
+              if (open) {
+                // Limpiar state al abrir: error previo de aprobar no aplica aca,
+                // y motivo previo de un intento cancelado no debe persistir.
+                setError(null);
+                setMotivo("");
+              }
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Rechazar alerta</DialogTitle>
+                <DialogDescription>
+                  Indicá por qué esta alerta es un falso positivo. El motivo queda en el histórico para auditoría.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Textarea
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  placeholder="Ej: Voucher escaneado mal por la IA, el original está correcto"
+                  rows={3}
+                  maxLength={AUDITORIA_MOTIVO_MAX_LENGTH}
+                />
+                <p className="text-xs text-slate-400 text-right">
+                  {motivo.length}/{AUDITORIA_MOTIVO_MAX_LENGTH}
+                </p>
+                {error && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                    {error}
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRechazoOpen(false)} disabled={isPending}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleRechazar}
+                  disabled={!motivoValido || isPending}
+                >
+                  Confirmar rechazo
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TableCell>
       </TableRow>
-      {error && (
+      {error && !rechazoOpen && (
         <TableRow>
           <TableCell colSpan={6} className="py-1 px-2">
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
