@@ -109,7 +109,7 @@ export interface CiudadResumen {
   ciudad: string;
   num_clientes: number;
   total_deuda: number;
-  total_vencido: number;
+  total_vencido_grave: number;
 }
 
 // --- Tipos Pre-facturacion ---

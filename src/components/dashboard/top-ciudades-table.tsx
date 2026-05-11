@@ -41,7 +41,7 @@ export function TopCiudadesTable({ ciudades }: TopCiudadesTableProps) {
           <TableBody>
             {ciudades.map((ciudad) => {
               const pctVencido = ciudad.total_deuda > 0
-                ? (ciudad.total_vencido / ciudad.total_deuda) * 100
+                ? (ciudad.total_vencido_grave / ciudad.total_deuda) * 100
                 : 0;
               return (
                 <TableRow key={ciudad.ciudad}>
