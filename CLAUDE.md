@@ -2,6 +2,38 @@
 
 Sistema de gestion de cartera (cuentas por cobrar) multi-tenant. Visualiza mora, envejecimiento, alertas de cupo y clientes inactivos.
 
+## Ecosistema Logiflow — reglas multi-tenant (LEER PRIMERO)
+
+Esta app comparte el Supabase `reaahmkrqxpbvnmrwhrt` con el resto del ecosistema:
+`hub`, `sync`, `cartera`, `ventas`, `pedidos`, `maestra`, `logistica`. Las reglas de
+abajo son del ECOSISTEMA — no se deciden a nivel de este repo.
+
+### Migrations / cambios de schema
+- **`logiflow-sync` es el ÚNICO dueño del schema compartido.** Toda migration nueva
+  de tablas, funciones o RLS del Supabase compartido va en Sync, **NO en este repo**.
+- Las migrations en `supabase/migrations/` de este repo están **CONGELADAS**
+  (históricas, ya aplicadas). **No agregar migrations nuevas acá.**
+- ¿Necesitás un cambio de schema (tabla, columna, función, policy, RLS)? **No lo
+  hagas acá.** Generá un prompt/handoff detallado para el agente de `logiflow-sync`.
+
+### Aislamiento multi-tenant
+- Lo garantiza la **RLS en la base**, vía funciones `private.*`
+  (`private.current_tenant()`, `private.has_tenant_access()`, `private.is_super_admin()`).
+  **No reimplementar** lógica de aislamiento de tenant en este repo.
+- El filtro `.eq('tenant_id', ...)` en queries es UX/optimización, **no** la garantía
+  de seguridad. La garantía es la RLS. Si te encontrás reescribiendo aislamiento acá,
+  falta una pieza en la base → arreglá la base (en Sync), no la app.
+- **Nunca `service_role` en el cliente** (web o APK). Solo anon key + sesión del usuario.
+
+### Identidad
+- `app_id` de esta app: **`cartera`**.
+- El tenant del usuario sale de su sesión (JWT → `profiles`). Nunca hardcodeado, nunca
+  de `user_metadata`.
+
+### Fuente de verdad
+- Contrato de aislamiento del ecosistema:
+  `docs/architecture/multi-tenant-isolation-contract.md` (en el repo `logiflow-sync`).
+
 ## Stack
 
 - Next.js 16 (App Router), React 19, TypeScript strict
@@ -17,7 +49,7 @@ Sistema de gestion de cartera (cuentas por cobrar) multi-tenant. Visualiza mora,
 - Proyecto: `reaahmkrqxpbvnmrwhrt` (linked en supabase/.temp/project-ref)
 - `.env.local` tiene: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `.env.local` NO tiene `SUPABASE_SERVICE_ROLE_KEY` — obtenerla con: `supabase projects api-keys --project-ref reaahmkrqxpbvnmrwhrt`
-- **IMPORTANTE**: La anon key sin sesion autenticada NO puede leer `sync_tenants`, `profiles`, `maestra_total` (RLS las bloquea). Para queries de diagnostico/admin usar SIEMPRE service_role key.
+- **IMPORTANTE**: La anon key sin sesion autenticada NO puede leer `sync_tenants`, `profiles`, `maestra_total` (RLS las bloquea). Para queries de diagnostico/admin usar SIEMPRE service_role key **solo desde el CLI local** — nunca en el runtime del cliente (web o APK), donde rige la regla del ecosistema: anon key + sesión del usuario.
 - Tablas `cartera`, `clientes_credito`, `pedidos` SI devuelven datos con anon key (RLS diferente).
 
 ## Ecosistema Logiflow
@@ -28,20 +60,22 @@ Este proyecto comparte el MISMO proyecto Supabase con logiflow-ventas. Ambos usa
 - Mismo patron de auth (getUserProfile + app_permissions), diferente APP_ID
 - Sync-Logiflow es el pipeline que pobla las tablas (jobs diarios ~3:45am COL)
 
-Cartera es dueno de las migraciones SQL (supabase/migrations/). Ventas no tiene migraciones propias.
+Las migrations en `supabase/migrations/` de este repo son **históricas y están CONGELADAS** (ya aplicadas). El dueño del schema compartido ahora es `logiflow-sync` — ver «Ecosistema Logiflow — reglas multi-tenant» arriba. No agregar migrations nuevas acá.
 
-### Ownership de objetos en Supabase
+### Origen de objetos en Supabase
 
-| Objeto | Dueño | Nota |
+La columna **Creado por** documenta qué migration histórica originó cada objeto, NO quién lo gobierna hoy: cambios futuros de schema van todos a `logiflow-sync`.
+
+| Objeto | Creado por (histórico) | Nota |
 |--------|-------|------|
 | Tablas base (cartera, pedidos, maestra_total, clientes_credito) | Sync-Logiflow | Pobladas por jobs diarios |
 | sync_tenants, sync_alertas, sync_credentials, sync_runs | Sync-Logiflow | Infraestructura de sync |
 | vista_pedidos_enriquecida | Sync-Logiflow | **No esta en migraciones locales** — si cambia alla, puede romper aca |
-| vista_cartera_enriquecida | logiflow-cartera | migrations/007 |
-| vista_cliente_resumen | logiflow-cartera | migrations/008, 010 |
-| notas_cliente | logiflow-cartera | migrations/009 |
-| profiles, app_permissions | logiflow-cartera | migrations/002, 005 |
-| RPCs (get_dashboard_kpis, get_envejecimiento, get_ciudades, get_segmentos, get_alertas_completas) | logiflow-cartera | migrations/004, 007, 011 |
+| vista_cartera_enriquecida | migrations/007 (este repo, congeladas) | mantenimiento futuro → Sync |
+| vista_cliente_resumen | migrations/008, 010 (este repo, congeladas) | mantenimiento futuro → Sync |
+| notas_cliente | migrations/009 (este repo, congeladas) | mantenimiento futuro → Sync |
+| profiles, app_permissions | migrations/002, 005 (este repo, congeladas) | mantenimiento futuro → Sync |
+| RPCs (get_dashboard_kpis, get_envejecimiento, get_ciudades, get_segmentos, get_alertas_completas) | migrations/004, 007, 011 (este repo, congeladas) | mantenimiento futuro → Sync |
 
 **Riesgo**: los tipos TypeScript de `vista_pedidos_enriquecida` estan escritos a mano en `cartera-server.ts`. Si Sync-Logiflow cambia columnas, cartera rompe en runtime sin error de compilacion.
 
