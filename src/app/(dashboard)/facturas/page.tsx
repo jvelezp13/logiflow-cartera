@@ -57,6 +57,9 @@ export default async function FacturasPage({
         titulo="Facturas"
         userName={profile.full_name}
         userRole={profile.role}
+        availableTenants={profile.available_tenants}
+        activeTenant={profile.active_tenant}
+        isSupportMode={profile.is_support_mode}
         incluirCastigada={incluirCastigada}
       />
 
