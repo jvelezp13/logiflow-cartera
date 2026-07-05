@@ -47,5 +47,9 @@ supabase/.temp/
 opencode.json
 .mcp.json
 
+# skill-registry (tooling generado, no versionar)
+.atl/skill-registry.md
+.atl/.skill-registry.cache.json
+
 # Supabase CLI temp files
 supabase/.temp/
