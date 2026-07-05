@@ -9,7 +9,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/app/login/actions";
 import { ToggleCastigada } from "@/components/toggle-castigada";
+import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 import type { AppRole } from "@/lib/auth/types";
+import type { AvailableTenant } from "@/lib/auth/get-tenant";
 
 interface HeaderProps {
   titulo: string;
@@ -17,6 +19,9 @@ interface HeaderProps {
   userRole?: AppRole | null;
   incluirCastigada?: boolean;
   onMenuToggle?: () => void;
+  availableTenants?: AvailableTenant[];
+  activeTenant?: AvailableTenant;
+  isSupportMode?: boolean;
 }
 
 export function Header({
@@ -25,7 +30,13 @@ export function Header({
   userRole,
   incluirCastigada = false,
   onMenuToggle,
+  availableTenants,
+  activeTenant,
+  isSupportMode = false,
 }: HeaderProps) {
+  // El selector solo aparece si el usuario tiene mas de un tenant disponible.
+  const showTenantSwitcher =
+    activeTenant != null && (availableTenants?.length ?? 0) > 1;
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b">
       <div className="flex items-center gap-3">
@@ -42,6 +53,13 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-4">
+        {showTenantSwitcher && (
+          <TenantSwitcher
+            activeTenant={activeTenant}
+            availableTenants={availableTenants ?? []}
+            isSupportMode={isSupportMode}
+          />
+        )}
         <ToggleCastigada incluirCastigada={incluirCastigada} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

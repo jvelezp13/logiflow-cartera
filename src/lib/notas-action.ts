@@ -45,6 +45,7 @@ export async function crearNota(
 
   const { error } = await supabase.from("notas_cliente").insert({
     tenant_id: profile.tenant_id,
+    app_id: "cartera",
     codigo_cliente: codigoCliente,
     tipo,
     contenido,
