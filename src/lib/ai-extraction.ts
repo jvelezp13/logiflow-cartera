@@ -224,7 +224,7 @@ export async function extraerDatosSoporte(
     throw new Error("Extraccion IA deshabilitada (ENABLE_AI_EXTRACTION=false)");
   }
 
-  const { base64 } = await obtenerImagenParaIA(objectKey);
+  const { base64, mimeType } = await obtenerImagenParaIA(objectKey);
 
   const { object } = await generateObject({
     model: google("gemini-2.5-flash"),
@@ -235,8 +235,9 @@ export async function extraerDatosSoporte(
         role: "user",
         content: [
           {
-            type: "image" as const,
-            image: Buffer.from(base64, "base64"),
+            type: "file" as const,
+            data: Buffer.from(base64, "base64"),
+            mediaType: mimeType,
           },
           {
             type: "text",

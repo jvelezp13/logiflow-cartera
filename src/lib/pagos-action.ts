@@ -111,6 +111,19 @@ export interface UrlVisualizacionResult {
   url?: string;
 }
 
+function getSafeErrorInfo(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      cause: error.cause instanceof Error
+        ? { name: error.cause.name }
+        : undefined,
+    };
+  }
+
+  return { type: typeof error };
+}
+
 interface FacturaInput {
   no_factura: string;
   valor_factura: number | null;
@@ -171,6 +184,10 @@ export async function extraerDatos(
     return { data, raw };
   } catch (e) {
     logError("extraerDatos", e);
+    console.error("[Logiflow] extraerDatos failed", {
+      error: getSafeErrorInfo(e),
+      objectKeyLength: objectKey.length,
+    });
     return {
       error:
         "No pudimos leer los datos del soporte. Podes ingresarlos manualmente.",
